@@ -9,6 +9,10 @@ __pycache__/
 .venv/
 venv/
 
+# Local secrets
+.env
+web-version/.env
+
 # OS
 .DS_Store
 Thumbs.db
@@ -22,3 +26,4 @@ Thumbs.db
 # Temp files
 /tmp/
 *.tmp
+*.log

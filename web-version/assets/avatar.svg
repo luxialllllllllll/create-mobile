@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="192" height="192" viewBox="0 0 192 192" role="img" aria-label="create-ex avatar">
+  <defs>
+    <linearGradient id="bg" x1="28" x2="166" y1="16" y2="178" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F6F2EA"/>
+      <stop offset=".54" stop-color="#BFD7CC"/>
+      <stop offset="1" stop-color="#6D7F75"/>
+    </linearGradient>
+    <linearGradient id="chat" x1="50" x2="145" y1="58" y2="134" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#F4E6D5"/>
+    </linearGradient>
+  </defs>
+  <rect width="192" height="192" rx="42" fill="url(#bg)"/>
+  <path d="M47 65c0-16 13-29 29-29h40c17 0 30 13 30 29v23c0 16-13 29-30 29H91l-31 27c-4 3-10 0-9-5l6-26c-7-5-10-14-10-25V65Z" fill="url(#chat)" stroke="#2F6F5E" stroke-width="5"/>
+  <circle cx="78" cy="78" r="7" fill="#2F6F5E"/>
+  <circle cx="99" cy="78" r="7" fill="#2F6F5E"/>
+  <circle cx="120" cy="78" r="7" fill="#2F6F5E"/>
+  <path d="M67 130c15 13 43 15 62 1" fill="none" stroke="#21342D" stroke-linecap="round" stroke-width="6"/>
+</svg>

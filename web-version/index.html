@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#f6f2ea" />
+    <title>create-ex mobile</title>
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">create-ex</p>
+          <h1>角色工坊</h1>
+        </div>
+        <button class="icon-button" id="exportAllBtn" type="button" aria-label="导出角色包" title="导出角色包">
+          <span aria-hidden="true">⇩</span>
+        </button>
+      </header>
+
+      <main class="screen">
+        <section class="panel active" id="panel-create" aria-labelledby="tab-create">
+          <div class="section-head">
+            <h2>基础信息</h2>
+            <span class="count-pill" id="roleVersion">v1</span>
+          </div>
+
+          <label class="field">
+            <span>已有角色</span>
+            <select id="characterSelect">
+              <option value="">选择电脑里的角色</option>
+            </select>
+          </label>
+
+          <label class="field">
+            <span>称呼</span>
+            <input id="nameInput" autocomplete="off" placeholder="例如：风离殇" />
+          </label>
+
+          <label class="field">
+            <span>关系概况</span>
+            <textarea id="basicInput" rows="4" placeholder="从小一起长大，没有正式在一起，他在国内，我在葡萄牙..."></textarea>
+          </label>
+
+          <label class="field">
+            <span>性格画像</span>
+            <textarea id="personaInput" rows="4" placeholder="温柔，会打趣，嘴毒但不伤人，ENFP，双子座..."></textarea>
+          </label>
+
+          <div class="quick-grid" aria-label="常用标签">
+            <button type="button" data-tag="温柔">温柔</button>
+            <button type="button" data-tag="行动型关心">行动型关心</button>
+            <button type="button" data-tag="克制">克制</button>
+            <button type="button" data-tag="会打趣">会打趣</button>
+            <button type="button" data-tag="嘴毒但不伤人">嘴毒但不伤人</button>
+            <button type="button" data-tag="有边界感">有边界感</button>
+          </div>
+
+          <div class="action-row">
+            <button class="primary" id="saveDraftBtn" type="button">保存草稿</button>
+            <button class="secondary" id="loadSampleBtn" type="button">载入示例</button>
+          </div>
+        </section>
+
+        <section class="panel" id="panel-materials" aria-labelledby="tab-materials">
+          <div class="section-head">
+            <h2>导入材料</h2>
+            <span class="count-pill" id="materialCount">0 条</span>
+          </div>
+
+          <label class="field">
+            <span>材料类型</span>
+            <select id="materialType">
+              <option value="chat">聊天记录</option>
+              <option value="memory">重要事件</option>
+              <option value="photo">照片时间线</option>
+              <option value="social">社交媒体</option>
+              <option value="correction">纠错记录</option>
+            </select>
+          </label>
+
+          <label class="field">
+            <span>粘贴文本</span>
+            <textarea id="materialInput" rows="7" placeholder="粘贴聊天、事件、parser 输出，或写几个印象最深的片段。"></textarea>
+          </label>
+
+          <label class="file-drop" for="fileInput">
+            <input id="fileInput" type="file" multiple accept=".txt,.md,.json,.csv" />
+            <strong>上传文本文件</strong>
+            <span>支持 txt / md / json / csv，内容只保存在本机浏览器</span>
+          </label>
+
+          <div class="action-row">
+            <button class="primary" id="addMaterialBtn" type="button">加入材料</button>
+            <button class="secondary" id="clearMaterialsBtn" type="button">清空</button>
+          </div>
+
+          <div class="material-list" id="materialList"></div>
+        </section>
+
+        <section class="panel" id="panel-generate" aria-labelledby="tab-generate">
+          <div class="section-head">
+            <h2>生成文件</h2>
+            <button class="text-button" id="copyCurrentBtn" type="button">复制当前</button>
+          </div>
+
+          <div class="segmented" role="tablist" aria-label="输出文件">
+            <button class="active" type="button" data-output="memories">memories</button>
+            <button type="button" data-output="persona">persona</button>
+            <button type="button" data-output="meta">meta</button>
+            <button type="button" data-output="gpt">GPT</button>
+          </div>
+
+          <pre class="output-box" id="outputBox"></pre>
+
+          <div class="action-row">
+            <button class="primary" id="regenerateBtn" type="button">重新生成</button>
+            <button class="secondary" id="downloadCurrentBtn" type="button">下载当前</button>
+          </div>
+        </section>
+
+        <section class="panel" id="panel-chat" aria-labelledby="tab-chat">
+          <div class="chat-header">
+            <div class="avatar-asset" aria-hidden="true"></div>
+            <div>
+              <h2 id="chatName">未命名角色</h2>
+              <p id="chatContext">微信式聊天 · 后端未连接</p>
+            </div>
+          </div>
+
+          <div class="chat-log" id="chatLog" aria-live="polite"></div>
+
+          <form class="chat-compose" id="chatForm">
+            <input id="chatInput" autocomplete="off" placeholder="跟角色说点什么" />
+            <button class="send-button" type="submit" aria-label="发送">➤</button>
+          </form>
+        </section>
+      </main>
+
+      <nav class="tabbar" aria-label="主导航">
+        <button class="active" id="tab-create" type="button" data-panel="create">创建</button>
+        <button id="tab-materials" type="button" data-panel="materials">材料</button>
+        <button id="tab-generate" type="button" data-panel="generate">生成</button>
+        <button id="tab-chat" type="button" data-panel="chat">聊天</button>
+      </nav>
+    </div>
+
+    <div class="toast" id="toast" role="status"></div>
+
+    <script src="./app.js"></script>
+    <script>
+      if ("serviceWorker" in navigator && window.isSecureContext) {
+        navigator.serviceWorker.register("./sw.js").catch(() => {});
+      }
+    </script>
+  </body>
+</html>

@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: create-ex-mobile
+    runtime: node
+    rootDir: web-version
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: MODEL_PROVIDER
+        value: zhipu
+      - key: ZHIPU_BASE_URL
+        value: https://open.bigmodel.cn/api/paas/v4
+      - key: ZHIPU_MODEL
+        value: glm-5.1
+      - key: ZHIPU_API_KEY
+        sync: false
