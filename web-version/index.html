@@ -35,6 +35,13 @@
           </label>
 
           <label class="field">
+            <span>本机角色</span>
+            <select id="localRoleSelect">
+              <option value="">当前草稿</option>
+            </select>
+          </label>
+
+          <label class="field">
             <span>称呼</span>
             <input id="nameInput" autocomplete="off" placeholder="例如：风离殇" />
           </label>
@@ -62,6 +69,7 @@
             <button class="primary" id="saveDraftBtn" type="button">保存草稿</button>
             <button class="secondary" id="loadSampleBtn" type="button">载入示例</button>
           </div>
+          <button class="secondary full-width" id="newRoleBtn" type="button">新建空白角色</button>
         </section>
 
         <section class="panel" id="panel-materials" aria-labelledby="tab-materials">
@@ -122,6 +130,13 @@
         </section>
 
         <section class="panel" id="panel-chat" aria-labelledby="tab-chat">
+          <label class="field chat-role-picker">
+            <span>聊天角色</span>
+            <select id="chatRoleSelect">
+              <option value="">当前草稿</option>
+            </select>
+          </label>
+
           <div class="chat-header">
             <div class="avatar-asset" aria-hidden="true"></div>
             <div>

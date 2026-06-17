@@ -240,6 +240,15 @@ select:focus {
   color: var(--accent-dark);
 }
 
+.full-width {
+  width: 100%;
+  margin: 0 0 14px;
+}
+
+.chat-role-picker {
+  flex: 0 0 auto;
+}
+
 .file-drop {
   display: grid;
   gap: 4px;

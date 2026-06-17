@@ -7,6 +7,8 @@ const state = {
     userId: "",
     savedAt: "",
   },
+  roles: {},
+  activeRoleKey: "",
   role: {
     name: "",
     slug: "",
@@ -60,7 +62,96 @@ function createLocalUserId() {
   return `user-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
+function blankRole() {
+  return {
+    name: "",
+    slug: "",
+    basic: "",
+    persona: "",
+    tags: [],
+    version: "v1",
+  };
+}
+
+function blankOutputs() {
+  return {
+    memories: "",
+    persona: "",
+    meta: "",
+    gpt: "",
+  };
+}
+
+function roleKeyFromRole(role = state.role) {
+  return role.slug || slugify(role.name || "unnamed-role");
+}
+
+function snapshotCurrentRole() {
+  return {
+    role: { ...state.role },
+    materials: [...state.materials],
+    outputs: { ...state.outputs },
+    chat: [...state.chat],
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+function persistCurrentRole() {
+  if (!state.role.name.trim()) return;
+  const key = roleKeyFromRole();
+  state.roles = state.roles || {};
+  state.roles[key] = snapshotCurrentRole();
+  state.activeRoleKey = key;
+}
+
+function applyRoleSnapshot(key) {
+  const snapshot = state.roles?.[key];
+  if (!snapshot) return false;
+  state.activeRoleKey = key;
+  state.selectedCharacter = "";
+  state.role = { ...blankRole(), ...(snapshot.role || {}) };
+  state.materials = [...(snapshot.materials || [])];
+  state.outputs = { ...blankOutputs(), ...(snapshot.outputs || {}) };
+  state.chat = [...(snapshot.chat || [])];
+  return true;
+}
+
+function renderLocalRoleSelectors() {
+  const selects = [els.localRoleSelect, els.chatRoleSelect].filter(Boolean);
+  const entries = Object.entries(state.roles || {}).sort(([, a], [, b]) =>
+    (b.updatedAt || "").localeCompare(a.updatedAt || "")
+  );
+  selects.forEach((select) => {
+    select.innerHTML = `<option value="">当前草稿</option>`;
+    entries.forEach(([key, snapshot]) => {
+      const option = document.createElement("option");
+      option.value = key;
+      option.textContent = snapshot.role?.name || key;
+      select.appendChild(option);
+    });
+    select.value = state.activeRoleKey || "";
+  });
+}
+
+function newBlankRole() {
+  persistCurrentRole();
+  state.activeRoleKey = "";
+  state.selectedCharacter = "";
+  state.role = blankRole();
+  state.materials = [];
+  state.outputs = blankOutputs();
+  state.chat = [];
+  syncInputs();
+  renderLocalRoleSelectors();
+  renderMaterials();
+  renderOutputs();
+  renderChat();
+  saveState();
+  toast("已新建空白角色");
+}
+
 function saveState() {
+  persistCurrentRole();
   state.storage = {
     ...(state.storage || {}),
     userId: state.storage?.userId || createLocalUserId(),
@@ -81,8 +172,15 @@ function loadState() {
     Object.assign(state, next);
     state.storage = { ...state.storage, ...(next.storage || {}) };
     state.storage.userId = state.storage.userId || createLocalUserId();
+    state.roles = next.roles || {};
     state.role = { ...state.role, ...(next.role || {}) };
     state.outputs = { ...state.outputs, ...(next.outputs || {}) };
+    if (!Object.keys(state.roles).length && state.role.name) {
+      persistCurrentRole();
+    }
+    if (state.activeRoleKey) {
+      applyRoleSnapshot(state.activeRoleKey);
+    }
   } catch {
     localStorage.removeItem(STORAGE_KEY);
     state.storage.userId = createLocalUserId();
@@ -98,6 +196,7 @@ function syncInputs() {
   document.querySelectorAll("[data-tag]").forEach((button) => {
     button.classList.toggle("active", state.role.tags.includes(button.dataset.tag));
   });
+  renderLocalRoleSelectors();
 }
 
 async function api(path, options = {}) {
@@ -143,6 +242,7 @@ async function refreshCharacters() {
 
 async function loadCharacter(slug) {
   if (!slug) return;
+  persistCurrentRole();
   const data = await api(`/api/characters/${encodeURIComponent(slug)}`);
   const character = data.character;
   state.selectedCharacter = slug;
@@ -167,6 +267,21 @@ async function loadCharacter(slug) {
   renderChat();
   saveState();
   toast("已载入电脑角色");
+}
+
+function switchLocalRole(key) {
+  if (!key) return;
+  persistCurrentRole();
+  if (!applyRoleSnapshot(key)) {
+    toast("这个角色存档不存在");
+    return;
+  }
+  syncInputs();
+  renderMaterials();
+  renderOutputs(false);
+  renderChat();
+  saveState();
+  toast(`已切换到 ${state.role.name || "未命名角色"}`);
 }
 
 function syncFromInputs() {
@@ -366,8 +481,8 @@ ${state.outputs.persona}
 `;
 }
 
-function renderOutputs() {
-  generateOutputs();
+function renderOutputs(allowTemplate = true) {
+  generateOutputs(allowTemplate);
   document.querySelectorAll("[data-output]").forEach((button) => {
     button.classList.toggle("active", button.dataset.output === state.selectedOutput);
   });
@@ -450,6 +565,9 @@ function filenameForOutput(kind) {
 }
 
 function loadSample() {
+  persistCurrentRole();
+  state.activeRoleKey = "";
+  state.selectedCharacter = "";
   state.role = {
     name: "林知夏",
     slug: "sample-lin-zhi-xia",
@@ -507,6 +625,12 @@ function bindEvents() {
     }
   });
 
+  [els.localRoleSelect, els.chatRoleSelect].forEach((select) => {
+    select.addEventListener("change", () => {
+      switchLocalRole(select.value);
+    });
+  });
+
   document.querySelectorAll("[data-tag]").forEach((button) => {
     button.addEventListener("click", () => {
       const tag = button.dataset.tag;
@@ -524,10 +648,12 @@ function bindEvents() {
   els.saveDraftBtn.addEventListener("click", () => {
     syncFromInputs();
     saveState();
-    toast("草稿已保存在本机");
+    renderLocalRoleSelectors();
+    toast(`${state.role.name || "草稿"} 已保存在本机`);
   });
 
   els.loadSampleBtn.addEventListener("click", loadSample);
+  els.newRoleBtn.addEventListener("click", newBlankRole);
 
   els.addMaterialBtn.addEventListener("click", () => {
     const text = els.materialInput.value.trim();
@@ -635,12 +761,15 @@ function cacheElements() {
   [
     "toast",
     "characterSelect",
+    "localRoleSelect",
+    "chatRoleSelect",
     "nameInput",
     "basicInput",
     "personaInput",
     "roleVersion",
     "saveDraftBtn",
     "loadSampleBtn",
+    "newRoleBtn",
     "materialCount",
     "materialType",
     "materialInput",
