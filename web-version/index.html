@@ -23,19 +23,19 @@
       <main class="screen">
         <section class="panel active" id="panel-create" aria-labelledby="tab-create">
           <div class="section-head">
-            <h2>基础信息</h2>
+            <h2>角色档案</h2>
             <span class="count-pill" id="roleVersion">v1</span>
           </div>
 
           <label class="field">
-            <span>已有角色</span>
+            <span>云端 / 示例角色</span>
             <select id="characterSelect">
-              <option value="">选择电脑里的角色</option>
+              <option value="">选择一个示例或云端角色</option>
             </select>
           </label>
 
           <label class="field">
-            <span>本机角色</span>
+            <span>我的角色</span>
             <select id="localRoleSelect">
               <option value="">当前草稿</option>
             </select>
@@ -65,11 +65,13 @@
             <button type="button" data-tag="有边界感">有边界感</button>
           </div>
 
-          <div class="action-row">
-            <button class="primary" id="saveDraftBtn" type="button">保存草稿</button>
-            <button class="secondary" id="loadSampleBtn" type="button">载入示例</button>
+          <div class="create-actions">
+            <button class="primary" id="saveDraftBtn" type="button">保存角色</button>
+            <div class="action-row compact-actions">
+              <button class="secondary" id="newRoleBtn" type="button">新建角色</button>
+              <button class="secondary" id="loadSampleBtn" type="button">载入示例</button>
+            </div>
           </div>
-          <button class="secondary full-width" id="newRoleBtn" type="button">新建空白角色</button>
         </section>
 
         <section class="panel" id="panel-materials" aria-labelledby="tab-materials">

@@ -709,6 +709,10 @@ function bindEvents() {
 
   els.saveDraftBtn.addEventListener("click", () => {
     syncFromInputs();
+    if (!state.role.name) {
+      toast("先填角色称呼");
+      return;
+    }
     saveState();
     renderLocalRoleSelectors();
     toast(`${state.role.name || "草稿"} 已保存在本机`);

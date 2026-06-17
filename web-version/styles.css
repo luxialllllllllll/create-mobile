@@ -224,6 +224,20 @@ select:focus {
   margin: 14px 0;
 }
 
+.create-actions {
+  display: grid;
+  gap: 9px;
+  margin: 14px 0 4px;
+}
+
+.create-actions > .primary {
+  min-height: 46px;
+}
+
+.compact-actions {
+  margin: 0;
+}
+
 .primary {
   border-color: var(--accent);
   background: var(--accent);
