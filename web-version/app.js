@@ -124,7 +124,11 @@ function getSortedRoleEntries() {
 }
 
 function renderLocalRoleSelectors() {
-  const selects = [els.localRoleSelect].filter(Boolean);
+  const selects = [
+    els.localRoleSelect,
+    els.materialRoleSelect,
+    els.generateRoleSelect,
+  ].filter(Boolean);
   const entries = Object.entries(state.roles || {}).sort(([, a], [, b]) =>
     (b.updatedAt || "").localeCompare(a.updatedAt || "")
   );
@@ -289,6 +293,15 @@ function switchLocalRole(key) {
   renderChat();
   saveState();
   toast(`已切换到 ${state.role.name || "未命名角色"}`);
+}
+
+function ensureNamedRole() {
+  syncFromInputs();
+  if (state.role.name) return true;
+  toast("先选择或创建一个角色");
+  state.activePanel = "create";
+  renderPanels();
+  return false;
 }
 
 function openChatRole(key) {
@@ -687,7 +700,7 @@ function bindEvents() {
     }
   });
 
-  [els.localRoleSelect].forEach((select) => {
+  [els.localRoleSelect, els.materialRoleSelect, els.generateRoleSelect].forEach((select) => {
     select.addEventListener("change", () => {
       switchLocalRole(select.value);
     });
@@ -732,6 +745,7 @@ function bindEvents() {
   });
 
   els.addMaterialBtn.addEventListener("click", () => {
+    if (!ensureNamedRole()) return;
     const text = els.materialInput.value.trim();
     if (!text) {
       toast("先粘贴一点材料");
@@ -751,6 +765,7 @@ function bindEvents() {
   });
 
   els.clearMaterialsBtn.addEventListener("click", () => {
+    if (!ensureNamedRole()) return;
     state.materials = [];
     renderMaterials();
     renderOutputs();
@@ -759,6 +774,10 @@ function bindEvents() {
   });
 
   els.fileInput.addEventListener("change", async (event) => {
+    if (!ensureNamedRole()) {
+      event.target.value = "";
+      return;
+    }
     const files = Array.from(event.target.files || []);
     for (const file of files) {
       const text = await file.text();
@@ -785,23 +804,27 @@ function bindEvents() {
   });
 
   els.regenerateBtn.addEventListener("click", () => {
+    if (!ensureNamedRole()) return;
     renderOutputs();
     saveState();
     toast("已重新生成");
   });
 
   els.copyCurrentBtn.addEventListener("click", async () => {
+    if (!ensureNamedRole()) return;
     renderOutputs();
     await navigator.clipboard.writeText(state.outputs[state.selectedOutput]);
     toast("已复制");
   });
 
   els.downloadCurrentBtn.addEventListener("click", () => {
+    if (!ensureNamedRole()) return;
     renderOutputs();
     download(filenameForOutput(state.selectedOutput), state.outputs[state.selectedOutput]);
   });
 
   els.exportAllBtn.addEventListener("click", () => {
+    if (!ensureNamedRole()) return;
     renderOutputs();
     const bundle = Object.entries(state.outputs)
       .map(([key, value]) => `===== ${filenameForOutput(key)} =====\n\n${value}`)
@@ -838,6 +861,8 @@ function cacheElements() {
     "toast",
     "characterSelect",
     "localRoleSelect",
+    "materialRoleSelect",
+    "generateRoleSelect",
     "nameInput",
     "basicInput",
     "personaInput",

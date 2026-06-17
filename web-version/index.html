@@ -81,6 +81,13 @@
           </div>
 
           <label class="field">
+            <span>当前角色</span>
+            <select id="materialRoleSelect">
+              <option value="">当前草稿</option>
+            </select>
+          </label>
+
+          <label class="field">
             <span>材料类型</span>
             <select id="materialType">
               <option value="chat">聊天记录</option>
@@ -115,6 +122,13 @@
             <h2>生成文件</h2>
             <button class="text-button" id="copyCurrentBtn" type="button">复制当前</button>
           </div>
+
+          <label class="field">
+            <span>当前角色</span>
+            <select id="generateRoleSelect">
+              <option value="">当前草稿</option>
+            </select>
+          </label>
 
           <div class="segmented" role="tablist" aria-label="输出文件">
             <button class="active" type="button" data-output="memories">memories</button>
