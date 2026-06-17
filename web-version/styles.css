@@ -409,15 +409,23 @@ select:focus {
 }
 
 .conversation-main small,
-.conversation-time,
 .empty-conversations {
   color: var(--muted);
   font-size: 12px;
 }
 
+.conversation-meta {
+  align-self: stretch;
+  display: grid;
+  justify-items: end;
+  align-content: start;
+  gap: 8px;
+}
+
 .conversation-time {
-  align-self: start;
   padding-top: 5px;
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .empty-conversations {
@@ -510,6 +518,7 @@ select:focus {
 }
 
 .tabbar button {
+  position: relative;
   min-height: 42px;
   border: 0;
   border-radius: var(--radius);
@@ -522,6 +531,27 @@ select:focus {
 .tabbar button.active {
   background: #dcebe4;
   color: var(--accent-dark);
+}
+
+.tab-badge,
+.conversation-badge {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #e33b32;
+  color: white;
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 18px;
+  text-align: center;
+}
+
+.tab-badge {
+  position: absolute;
+  top: 3px;
+  right: 8px;
+  box-shadow: 0 0 0 2px rgba(255, 250, 242, 0.95);
 }
 
 .toast {

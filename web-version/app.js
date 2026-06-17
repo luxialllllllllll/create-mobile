@@ -10,6 +10,7 @@ const state = {
   roles: {},
   activeRoleKey: "",
   chatView: "list",
+  unread: 0,
   role: {
     name: "",
     slug: "",
@@ -93,6 +94,7 @@ function snapshotCurrentRole() {
     materials: [...state.materials],
     outputs: { ...state.outputs },
     chat: [...state.chat],
+    unread: state.unread || 0,
     updatedAt: new Date().toISOString(),
   };
 }
@@ -114,6 +116,7 @@ function applyRoleSnapshot(key) {
   state.materials = [...(snapshot.materials || [])];
   state.outputs = { ...blankOutputs(), ...(snapshot.outputs || {}) };
   state.chat = [...(snapshot.chat || [])];
+  state.unread = snapshot.unread || 0;
   return true;
 }
 
@@ -121,6 +124,17 @@ function getSortedRoleEntries() {
   return Object.entries(state.roles || {}).sort(([, a], [, b]) =>
     (b.updatedAt || "").localeCompare(a.updatedAt || "")
   );
+}
+
+function totalUnreadCount() {
+  return Object.values(state.roles || {}).reduce((total, snapshot) => total + (snapshot.unread || 0), 0);
+}
+
+function renderUnreadBadges() {
+  const total = totalUnreadCount();
+  if (!els.chatUnreadBadge) return;
+  els.chatUnreadBadge.hidden = total <= 0;
+  els.chatUnreadBadge.textContent = total > 99 ? "99+" : String(total);
 }
 
 function renderLocalRoleSelectors() {
@@ -152,6 +166,7 @@ function newBlankRole() {
   state.materials = [];
   state.outputs = blankOutputs();
   state.chat = [];
+  state.unread = 0;
   syncInputs();
   renderLocalRoleSelectors();
   renderMaterials();
@@ -307,6 +322,10 @@ function ensureNamedRole() {
 function openChatRole(key) {
   if (key) switchLocalRole(key);
   state.chatView = "thread";
+  state.unread = 0;
+  if (state.activeRoleKey && state.roles[state.activeRoleKey]) {
+    state.roles[state.activeRoleKey].unread = 0;
+  }
   renderChat();
   saveState();
 }
@@ -325,6 +344,27 @@ function renderPanels() {
   document.querySelectorAll(".tabbar button").forEach((button) => {
     button.classList.toggle("active", button.dataset.panel === state.activePanel);
   });
+  renderUnreadBadges();
+}
+
+function appendMessageToRole(key, message, unread = false) {
+  if (!key) return;
+  const isCurrent = key === state.activeRoleKey;
+  if (isCurrent) {
+    state.chat.push(message);
+    if (unread) state.unread = (state.unread || 0) + 1;
+    persistCurrentRole();
+    return;
+  }
+  const snapshot = state.roles?.[key];
+  if (!snapshot) return;
+  snapshot.chat = [...(snapshot.chat || []), message];
+  snapshot.updatedAt = new Date().toISOString();
+  if (unread) snapshot.unread = (snapshot.unread || 0) + 1;
+}
+
+function isViewingRoleThread(key) {
+  return state.activePanel === "chat" && state.chatView === "thread" && state.activeRoleKey === key;
 }
 
 function materialTitle(type) {
@@ -526,6 +566,7 @@ function lastMessageText(snapshot) {
 function renderConversationList() {
   els.conversationList.innerHTML = "";
   const entries = getSortedRoleEntries();
+  renderUnreadBadges();
   if (!entries.length) {
     const empty = document.createElement("div");
     empty.className = "empty-conversations";
@@ -544,19 +585,26 @@ function renderConversationList() {
         <strong></strong>
         <small></small>
       </span>
-      <span class="conversation-time"></span>
+      <span class="conversation-meta">
+        <span class="conversation-time"></span>
+        <span class="conversation-badge" hidden>0</span>
+      </span>
     `;
     item.querySelector("strong").textContent = snapshot.role?.name || key;
     item.querySelector("small").textContent = lastMessageText(snapshot);
     item.querySelector(".conversation-time").textContent = snapshot.updatedAt
       ? new Date(snapshot.updatedAt).toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" })
       : "";
+    const badge = item.querySelector(".conversation-badge");
+    badge.hidden = !(snapshot.unread > 0);
+    badge.textContent = snapshot.unread > 99 ? "99+" : String(snapshot.unread || 0);
     item.addEventListener("click", () => openChatRole(key));
     els.conversationList.appendChild(item);
   });
 }
 
 function renderChat() {
+  renderUnreadBadges();
   const isList = state.chatView !== "thread";
   els.chatListView.classList.toggle("active", isList);
   els.chatThreadView.classList.toggle("active", !isList);
@@ -836,17 +884,21 @@ function bindEvents() {
     event.preventDefault();
     const text = els.chatInput.value.trim();
     if (!text) return;
+    const replyRoleKey = state.activeRoleKey || roleKeyFromRole();
     state.chat.push({ who: "user", text });
     els.chatInput.value = "";
     renderChat();
     saveState();
     try {
       const realReply = await sendRealChat(text);
-      state.chat.push({ who: "bot", text: realReply || botReply(text) });
+      const unread = !isViewingRoleThread(replyRoleKey);
+      appendMessageToRole(replyRoleKey, { who: "bot", text: realReply || botReply(text) }, unread);
     } catch (error) {
-      state.chat.push({ who: "bot", text: `接口出问题了。\n${error.message}` });
+      const unread = !isViewingRoleThread(replyRoleKey);
+      appendMessageToRole(replyRoleKey, { who: "bot", text: `接口出问题了。\n${error.message}` }, unread);
     }
     renderChat();
+    renderUnreadBadges();
     saveState();
   });
 
@@ -885,6 +937,7 @@ function cacheElements() {
     "chatListView",
     "chatThreadView",
     "conversationList",
+    "chatUnreadBadge",
     "chatNewRoleBtn",
     "chatBackBtn",
     "chatName",
