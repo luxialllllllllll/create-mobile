@@ -130,27 +130,31 @@
         </section>
 
         <section class="panel" id="panel-chat" aria-labelledby="tab-chat">
-          <label class="field chat-role-picker">
-            <span>聊天角色</span>
-            <select id="chatRoleSelect">
-              <option value="">当前草稿</option>
-            </select>
-          </label>
-
-          <div class="chat-header">
-            <div class="avatar-asset" aria-hidden="true"></div>
-            <div>
-              <h2 id="chatName">未命名角色</h2>
-              <p id="chatContext">微信式聊天 · 后端未连接</p>
+          <div class="chat-list-view" id="chatListView">
+            <div class="section-head">
+              <h2>聊天</h2>
+              <button class="text-button" id="chatNewRoleBtn" type="button">新建</button>
             </div>
+            <div class="conversation-list" id="conversationList"></div>
           </div>
 
-          <div class="chat-log" id="chatLog" aria-live="polite"></div>
+          <div class="chat-thread-view" id="chatThreadView">
+            <div class="chat-header">
+              <button class="icon-button back-button" id="chatBackBtn" type="button" aria-label="返回聊天列表">‹</button>
+              <div class="avatar-asset" aria-hidden="true"></div>
+              <div>
+                <h2 id="chatName">未命名角色</h2>
+                <p id="chatContext">微信式聊天 · 后端未连接</p>
+              </div>
+            </div>
 
-          <form class="chat-compose" id="chatForm">
-            <input id="chatInput" autocomplete="off" placeholder="跟角色说点什么" />
-            <button class="send-button" type="submit" aria-label="发送">➤</button>
-          </form>
+            <div class="chat-log" id="chatLog" aria-live="polite"></div>
+
+            <form class="chat-compose" id="chatForm">
+              <input id="chatInput" autocomplete="off" placeholder="跟角色说点什么" />
+              <button class="send-button" type="submit" aria-label="发送">➤</button>
+            </form>
+          </div>
         </section>
       </main>
 

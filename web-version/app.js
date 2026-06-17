@@ -9,6 +9,7 @@ const state = {
   },
   roles: {},
   activeRoleKey: "",
+  chatView: "list",
   role: {
     name: "",
     slug: "",
@@ -116,8 +117,14 @@ function applyRoleSnapshot(key) {
   return true;
 }
 
+function getSortedRoleEntries() {
+  return Object.entries(state.roles || {}).sort(([, a], [, b]) =>
+    (b.updatedAt || "").localeCompare(a.updatedAt || "")
+  );
+}
+
 function renderLocalRoleSelectors() {
-  const selects = [els.localRoleSelect, els.chatRoleSelect].filter(Boolean);
+  const selects = [els.localRoleSelect].filter(Boolean);
   const entries = Object.entries(state.roles || {}).sort(([, a], [, b]) =>
     (b.updatedAt || "").localeCompare(a.updatedAt || "")
   );
@@ -282,6 +289,13 @@ function switchLocalRole(key) {
   renderChat();
   saveState();
   toast(`已切换到 ${state.role.name || "未命名角色"}`);
+}
+
+function openChatRole(key) {
+  if (key) switchLocalRole(key);
+  state.chatView = "thread";
+  renderChat();
+  saveState();
 }
 
 function syncFromInputs() {
@@ -489,7 +503,54 @@ function renderOutputs(allowTemplate = true) {
   els.outputBox.textContent = state.outputs[state.selectedOutput] || "";
 }
 
+function lastMessageText(snapshot) {
+  const last = snapshot.chat?.[snapshot.chat.length - 1];
+  if (last?.text) return last.text.replace(/\s+/g, " ").slice(0, 34);
+  if (snapshot.role?.basic) return snapshot.role.basic.slice(0, 34);
+  return "还没有聊天记录";
+}
+
+function renderConversationList() {
+  els.conversationList.innerHTML = "";
+  const entries = getSortedRoleEntries();
+  if (!entries.length) {
+    const empty = document.createElement("div");
+    empty.className = "empty-conversations";
+    empty.textContent = "还没有角色。先去创建一个，或者载入示例。";
+    els.conversationList.appendChild(empty);
+    return;
+  }
+  entries.forEach(([key, snapshot]) => {
+    const item = document.createElement("button");
+    item.className = "conversation-item";
+    item.type = "button";
+    item.dataset.roleKey = key;
+    item.innerHTML = `
+      <span class="conversation-avatar" aria-hidden="true"></span>
+      <span class="conversation-main">
+        <strong></strong>
+        <small></small>
+      </span>
+      <span class="conversation-time"></span>
+    `;
+    item.querySelector("strong").textContent = snapshot.role?.name || key;
+    item.querySelector("small").textContent = lastMessageText(snapshot);
+    item.querySelector(".conversation-time").textContent = snapshot.updatedAt
+      ? new Date(snapshot.updatedAt).toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" })
+      : "";
+    item.addEventListener("click", () => openChatRole(key));
+    els.conversationList.appendChild(item);
+  });
+}
+
 function renderChat() {
+  const isList = state.chatView !== "thread";
+  els.chatListView.classList.toggle("active", isList);
+  els.chatThreadView.classList.toggle("active", !isList);
+  if (isList) {
+    renderConversationList();
+    return;
+  }
   const name = state.role.name || "未命名角色";
   els.chatName.textContent = name;
   if (state.server.online && state.server.hasApiKey) {
@@ -601,6 +662,7 @@ function bindEvents() {
   document.querySelectorAll(".tabbar button").forEach((button) => {
     button.addEventListener("click", () => {
       state.activePanel = button.dataset.panel;
+      if (state.activePanel === "chat") state.chatView = "list";
       renderPanels();
       if (state.activePanel === "generate") renderOutputs();
       if (state.activePanel === "chat") renderChat();
@@ -625,7 +687,7 @@ function bindEvents() {
     }
   });
 
-  [els.localRoleSelect, els.chatRoleSelect].forEach((select) => {
+  [els.localRoleSelect].forEach((select) => {
     select.addEventListener("change", () => {
       switchLocalRole(select.value);
     });
@@ -654,6 +716,16 @@ function bindEvents() {
 
   els.loadSampleBtn.addEventListener("click", loadSample);
   els.newRoleBtn.addEventListener("click", newBlankRole);
+  els.chatNewRoleBtn.addEventListener("click", () => {
+    state.activePanel = "create";
+    newBlankRole();
+    renderPanels();
+  });
+  els.chatBackBtn.addEventListener("click", () => {
+    state.chatView = "list";
+    renderChat();
+    saveState();
+  });
 
   els.addMaterialBtn.addEventListener("click", () => {
     const text = els.materialInput.value.trim();
@@ -762,7 +834,6 @@ function cacheElements() {
     "toast",
     "characterSelect",
     "localRoleSelect",
-    "chatRoleSelect",
     "nameInput",
     "basicInput",
     "personaInput",
@@ -782,6 +853,11 @@ function cacheElements() {
     "regenerateBtn",
     "downloadCurrentBtn",
     "exportAllBtn",
+    "chatListView",
+    "chatThreadView",
+    "conversationList",
+    "chatNewRoleBtn",
+    "chatBackBtn",
     "chatName",
     "chatContext",
     "chatLog",

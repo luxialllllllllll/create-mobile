@@ -245,10 +245,6 @@ select:focus {
   margin: 0 0 14px;
 }
 
-.chat-role-picker {
-  flex: 0 0 auto;
-}
-
 .file-drop {
   display: grid;
   gap: 4px;
@@ -328,12 +324,107 @@ select:focus {
   font-size: 12.5px;
 }
 
+.chat-list-view,
+.chat-thread-view {
+  display: none;
+  min-height: 0;
+  height: 100%;
+}
+
+.chat-list-view.active,
+.chat-thread-view.active {
+  display: flex;
+  flex-direction: column;
+}
+
+.conversation-list {
+  display: grid;
+  gap: 1px;
+  overflow: auto;
+  min-height: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: rgba(222, 212, 199, 0.72);
+}
+
+.conversation-item {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 48px 1fr auto;
+  gap: 11px;
+  align-items: center;
+  min-height: 68px;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 0;
+  background: rgba(255, 253, 248, 0.96);
+  color: var(--ink);
+  text-align: left;
+}
+
+.conversation-item:active {
+  background: #edf3ee;
+}
+
+.conversation-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background:
+    linear-gradient(135deg, rgba(255,255,255,.35), transparent 45%),
+    url("./assets/avatar.svg") center / cover,
+    linear-gradient(135deg, #c9d8d1, #826f62);
+  border: 1px solid rgba(47, 111, 94, 0.24);
+}
+
+.conversation-main {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.conversation-main strong,
+.conversation-main small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.conversation-main strong {
+  font-size: 15px;
+}
+
+.conversation-main small,
+.conversation-time,
+.empty-conversations {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.conversation-time {
+  align-self: start;
+  padding-top: 5px;
+}
+
+.empty-conversations {
+  padding: 18px;
+  background: rgba(255, 253, 248, 0.96);
+}
+
 .chat-header {
   justify-content: flex-start;
   padding: 10px;
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: rgba(255, 253, 248, 0.82);
+}
+
+.back-button {
+  width: 34px;
+  height: 34px;
+  font-size: 28px;
+  box-shadow: none;
+  background: transparent;
 }
 
 .chat-header p {
