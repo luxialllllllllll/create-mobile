@@ -1,7 +1,7 @@
 const STORAGE_KEY = "create-ex-mobile-state";
 
 const state = {
-  activePanel: "create",
+  activePanel: "chat",
   selectedOutput: "memories",
   storage: {
     userId: "",
