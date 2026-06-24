@@ -7,10 +7,10 @@ services:
     startCommand: npm start
     envVars:
       - key: MODEL_PROVIDER
-        value: zhipu
-      - key: ZHIPU_BASE_URL
-        value: https://open.bigmodel.cn/api/paas/v4
-      - key: ZHIPU_MODEL
-        value: glm-5.1
-      - key: ZHIPU_API_KEY
+        value: gemini
+      - key: GEMINI_BASE_URL
+        value: https://generativelanguage.googleapis.com/v1beta/openai
+      - key: GEMINI_MODEL
+        value: gemini-2.5-flash
+      - key: GEMINI_API_KEY
         sync: false

@@ -27,13 +27,16 @@
 在 Render 的 Environment 页面添加：
 
 ```text
-MODEL_PROVIDER=zhipu
-ZHIPU_BASE_URL=https://open.bigmodel.cn/api/paas/v4
-ZHIPU_MODEL=glm-5.1
-ZHIPU_API_KEY=你的智谱 API Key
+MODEL_PROVIDER=gemini
+GEMINI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai
+GEMINI_MODEL=gemini-2.5-flash
+GEMINI_API_KEY=你的 Gemini API Key
 ```
 
 不要把 API Key 写进代码或上传到 GitHub。
+
+Gemini API Key 可以在 Google AI Studio 创建。已有 Render 服务不会自动删除旧的智谱变量；
+只要新增以上四项，并确保 `MODEL_PROVIDER=gemini` 即可。旧变量可以保留，也可以手动删除。
 
 ## 部署后的使用方式
 

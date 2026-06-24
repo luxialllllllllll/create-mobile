@@ -106,6 +106,14 @@ function loadDotEnv() {
 function getConfig() {
   const fileEnv = loadDotEnv();
   const provider = process.env.MODEL_PROVIDER || fileEnv.MODEL_PROVIDER || "deepseek";
+  if (provider === "gemini") {
+    return {
+      provider,
+      apiKey: process.env.GEMINI_API_KEY || fileEnv.GEMINI_API_KEY || process.env.API_KEY || fileEnv.API_KEY || "",
+      baseUrl: process.env.GEMINI_BASE_URL || fileEnv.GEMINI_BASE_URL || "https://generativelanguage.googleapis.com/v1beta/openai",
+      model: process.env.GEMINI_MODEL || fileEnv.GEMINI_MODEL || "gemini-2.5-flash",
+    };
+  }
   if (provider === "zhipu") {
     return {
       provider,
@@ -243,7 +251,7 @@ ${character.persona}
 async function callModel({ character, messages }) {
   const config = getConfig();
   if (!config.apiKey) {
-    throw new Error("还没有配置 API Key。请在 web-version/.env 里填写 DEEPSEEK_API_KEY。");
+    throw new Error(`还没有配置 ${config.provider} API Key。请检查本地 .env 或 Render 环境变量。`);
   }
   const endpoint = `${config.baseUrl.replace(/\/$/, "")}/chat/completions`;
   const body = {
