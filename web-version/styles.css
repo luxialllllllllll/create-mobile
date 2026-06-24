@@ -455,6 +455,31 @@ select:focus {
   font-size: 12px;
 }
 
+.chat-heading {
+  min-width: 0;
+  flex: 1;
+}
+
+.chat-heading h2,
+.chat-heading p {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.voice-toggle {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  box-shadow: none;
+  font-size: 16px;
+}
+
+.voice-toggle.active {
+  border-color: var(--accent);
+  background: #dcebe4;
+}
+
 .avatar-asset {
   width: 44px;
   height: 44px;
@@ -490,6 +515,16 @@ select:focus {
   align-self: flex-start;
   background: #ffffff;
   border: 1px solid var(--line);
+  cursor: pointer;
+}
+
+.bubble.bot:active {
+  background: #edf3ee;
+}
+
+.bubble.bot.speaking {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(47, 111, 94, 0.12);
 }
 
 .bubble.user {
@@ -500,11 +535,37 @@ select:focus {
 
 .chat-compose {
   display: grid;
-  grid-template-columns: 1fr 42px;
+  grid-template-columns: 42px 1fr 42px;
   gap: 8px;
   align-items: center;
   padding: 8px 0 0;
   flex: 0 0 auto;
+}
+
+.mic-button {
+  font-size: 17px;
+  box-shadow: none;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.mic-button.recording {
+  border-color: #d73b32;
+  background: #d73b32;
+  color: #fff;
+  animation: voice-pulse 1s ease-in-out infinite;
+}
+
+.chat-compose.listening input {
+  border-color: #d73b32;
+  box-shadow: 0 0 0 3px rgba(215, 59, 50, 0.12);
+}
+
+@keyframes voice-pulse {
+  50% {
+    transform: scale(0.92);
+  }
 }
 
 .tabbar {

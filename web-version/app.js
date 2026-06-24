@@ -72,6 +72,7 @@ function blankRole() {
     persona: "",
     tags: [],
     version: "v1",
+    voiceAuto: false,
   };
 }
 
@@ -614,6 +615,8 @@ function renderChat() {
   }
   const name = state.role.name || "未命名角色";
   els.chatName.textContent = name;
+  els.autoVoiceBtn.classList.toggle("active", Boolean(state.role.voiceAuto));
+  els.autoVoiceBtn.setAttribute("aria-pressed", String(Boolean(state.role.voiceAuto)));
   if (state.server.online && state.server.hasApiKey) {
     els.chatContext.textContent = `${state.role.slug || "local"} · ${state.server.provider}/${state.server.model}`;
   } else if (state.server.online) {
@@ -629,9 +632,126 @@ function renderChat() {
     const bubble = document.createElement("div");
     bubble.className = `bubble ${message.who}`;
     bubble.textContent = message.text;
+    if (message.who === "bot") {
+      bubble.tabIndex = 0;
+      bubble.setAttribute("role", "button");
+      bubble.setAttribute("aria-label", `朗读消息：${message.text}`);
+      bubble.title = "点击朗读";
+      bubble.addEventListener("click", () => speakText(message.text, bubble));
+      bubble.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          speakText(message.text, bubble);
+        }
+      });
+    }
     els.chatLog.appendChild(bubble);
   });
   els.chatLog.scrollTop = els.chatLog.scrollHeight;
+}
+
+let activeRecognition = null;
+let voiceTranscript = "";
+let voiceShouldSend = false;
+
+function speechRecognitionClass() {
+  return window.SpeechRecognition || window.webkitSpeechRecognition || null;
+}
+
+function setListening(active) {
+  els.voiceInputBtn.classList.toggle("recording", active);
+  els.chatForm.classList.toggle("listening", active);
+  els.voiceInputBtn.setAttribute("aria-label", active ? "松开发送" : "按住说话");
+}
+
+function finishVoiceInput(send = true) {
+  voiceShouldSend = send;
+  setListening(false);
+  if (activeRecognition) {
+    try {
+      activeRecognition.stop();
+    } catch {
+      activeRecognition = null;
+    }
+  }
+}
+
+function startVoiceInput(event) {
+  event.preventDefault();
+  if (!ensureNamedRole()) return;
+  const Recognition = speechRecognitionClass();
+  if (!Recognition) {
+    toast("当前浏览器不支持语音识别，请用最新版 Chrome 或 Safari");
+    return;
+  }
+  if (activeRecognition) return;
+  window.speechSynthesis?.cancel();
+  voiceTranscript = "";
+  voiceShouldSend = false;
+  const recognition = new Recognition();
+  activeRecognition = recognition;
+  recognition.lang = "zh-CN";
+  recognition.continuous = true;
+  recognition.interimResults = true;
+  recognition.maxAlternatives = 1;
+  recognition.onstart = () => {
+    setListening(true);
+    els.chatInput.placeholder = "正在听，松开发送";
+  };
+  recognition.onresult = (resultEvent) => {
+    let transcript = "";
+    for (let index = 0; index < resultEvent.results.length; index += 1) {
+      transcript += resultEvent.results[index][0]?.transcript || "";
+    }
+    voiceTranscript = transcript;
+    els.chatInput.value = voiceTranscript.trim();
+  };
+  recognition.onerror = (errorEvent) => {
+    if (errorEvent.error !== "aborted" && errorEvent.error !== "no-speech") {
+      toast(errorEvent.error === "not-allowed" ? "请允许浏览器使用麦克风" : "没听清，再试一次");
+    }
+  };
+  recognition.onend = () => {
+    activeRecognition = null;
+    setListening(false);
+    els.chatInput.placeholder = "跟角色说点什么";
+    if (voiceShouldSend && els.chatInput.value.trim()) {
+      els.chatForm.requestSubmit();
+    }
+  };
+  try {
+    recognition.start();
+    els.voiceInputBtn.setPointerCapture?.(event.pointerId);
+  } catch {
+    activeRecognition = null;
+    setListening(false);
+    toast("麦克风启动失败，请刷新后重试");
+  }
+}
+
+function preferredChineseVoice() {
+  const voices = window.speechSynthesis?.getVoices?.() || [];
+  return voices.find((voice) => /^zh[-_](CN|Hans)/i.test(voice.lang))
+    || voices.find((voice) => /^zh/i.test(voice.lang))
+    || null;
+}
+
+function speakText(text, bubble = null) {
+  if (!("speechSynthesis" in window) || !window.SpeechSynthesisUtterance) {
+    toast("当前浏览器不支持语音朗读");
+    return;
+  }
+  window.speechSynthesis.cancel();
+  document.querySelectorAll(".bubble.speaking").forEach((node) => node.classList.remove("speaking"));
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.lang = "zh-CN";
+  utterance.rate = 0.96;
+  utterance.pitch = 0.94;
+  utterance.voice = preferredChineseVoice();
+  utterance.onstart = () => bubble?.classList.add("speaking");
+  utterance.onend = () => bubble?.classList.remove("speaking");
+  utterance.onerror = () => bubble?.classList.remove("speaking");
+  window.speechSynthesis.speak(utterance);
 }
 
 function botReply(text) {
@@ -787,10 +907,24 @@ function bindEvents() {
     renderPanels();
   });
   els.chatBackBtn.addEventListener("click", () => {
+    window.speechSynthesis?.cancel();
     state.chatView = "list";
     renderChat();
     saveState();
   });
+  els.autoVoiceBtn.addEventListener("click", () => {
+    state.role.voiceAuto = !state.role.voiceAuto;
+    renderChat();
+    saveState();
+    toast(state.role.voiceAuto ? "已开启自动朗读" : "已关闭自动朗读");
+  });
+  els.voiceInputBtn.addEventListener("pointerdown", startVoiceInput);
+  els.voiceInputBtn.addEventListener("pointerup", () => finishVoiceInput(true));
+  els.voiceInputBtn.addEventListener("pointercancel", () => finishVoiceInput(false));
+  els.voiceInputBtn.addEventListener("lostpointercapture", () => {
+    if (activeRecognition) finishVoiceInput(true);
+  });
+  els.voiceInputBtn.addEventListener("contextmenu", (event) => event.preventDefault());
 
   els.addMaterialBtn.addEventListener("click", () => {
     if (!ensureNamedRole()) return;
@@ -892,7 +1026,9 @@ function bindEvents() {
     try {
       const realReply = await sendRealChat(text);
       const unread = !isViewingRoleThread(replyRoleKey);
-      appendMessageToRole(replyRoleKey, { who: "bot", text: realReply || botReply(text) }, unread);
+      const replyText = realReply || botReply(text);
+      appendMessageToRole(replyRoleKey, { who: "bot", text: replyText }, unread);
+      if (!unread && state.role.voiceAuto) speakText(replyText);
     } catch (error) {
       const unread = !isViewingRoleThread(replyRoleKey);
       appendMessageToRole(replyRoleKey, { who: "bot", text: `接口出问题了。\n${error.message}` }, unread);
@@ -945,6 +1081,8 @@ function cacheElements() {
     "chatLog",
     "chatForm",
     "chatInput",
+    "autoVoiceBtn",
+    "voiceInputBtn",
   ].forEach((id) => {
     els[id] = $(id);
   });
