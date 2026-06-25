@@ -196,9 +196,7 @@ h2 {
 }
 
 .custom-avatar {
-  background-position: center;
-  background-size: cover;
-  background-repeat: no-repeat;
+  background-color: #e7eee8 !important;
 }
 
 input,

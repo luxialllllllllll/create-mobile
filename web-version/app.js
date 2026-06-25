@@ -807,12 +807,12 @@ async function applyRoleAvatar(element, role) {
   const avatarId = role?.avatarId || "";
   element.dataset.avatarId = avatarId;
   element.classList.remove("custom-avatar");
-  element.style.backgroundImage = "";
+  element.style.removeProperty("background");
   if (!avatarId) return;
   try {
     const url = await avatarUrl(avatarId);
     if (!url || element.dataset.avatarId !== avatarId) return;
-    element.style.backgroundImage = `url("${url}")`;
+    element.style.setProperty("background", `url("${url}") center / cover no-repeat`, "important");
     element.classList.add("custom-avatar");
   } catch {
     // Keep the default avatar when local media is unavailable.
