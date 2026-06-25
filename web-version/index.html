@@ -96,49 +96,6 @@
           </div>
         </section>
 
-        <section class="panel" id="panel-materials" aria-labelledby="tab-materials">
-          <div class="section-head">
-            <h2>导入材料</h2>
-            <span class="count-pill" id="materialCount">0 条</span>
-          </div>
-
-          <label class="field">
-            <span>当前角色</span>
-            <select id="materialRoleSelect">
-              <option value="">当前草稿</option>
-            </select>
-          </label>
-
-          <label class="field">
-            <span>材料类型</span>
-            <select id="materialType">
-              <option value="chat">聊天记录</option>
-              <option value="memory">重要事件</option>
-              <option value="photo">照片时间线</option>
-              <option value="social">社交媒体</option>
-              <option value="correction">纠错记录</option>
-            </select>
-          </label>
-
-          <label class="field">
-            <span>粘贴文本</span>
-            <textarea id="materialInput" rows="7" placeholder="粘贴聊天、事件、parser 输出，或写几个印象最深的片段。"></textarea>
-          </label>
-
-          <label class="file-drop" for="fileInput">
-            <input id="fileInput" type="file" multiple accept=".txt,.md,.json,.csv" />
-            <strong>上传文本文件</strong>
-            <span>支持 txt / md / json / csv，内容只保存在本机浏览器</span>
-          </label>
-
-          <div class="action-row">
-            <button class="primary" id="addMaterialBtn" type="button">加入材料</button>
-            <button class="secondary" id="clearMaterialsBtn" type="button">清空</button>
-          </div>
-
-          <div class="material-list" id="materialList"></div>
-        </section>
-
         <section class="panel" id="panel-generate" aria-labelledby="tab-generate">
           <div class="section-head">
             <h2>生成文件</h2>
@@ -184,6 +141,7 @@
                 <h2 id="chatName">未命名角色</h2>
                 <p id="chatContext">微信式聊天 · 后端未连接</p>
               </div>
+              <button class="icon-button details-button" id="chatDetailsBtn" type="button" aria-label="角色详情" title="角色详情">⋯</button>
               <button class="icon-button voice-toggle" id="autoVoiceBtn" type="button" aria-label="自动朗读角色回复" title="自动朗读角色回复" aria-pressed="false">&#128266;</button>
             </div>
 
@@ -195,6 +153,77 @@
               <button class="send-button" type="submit" aria-label="发送">➤</button>
             </form>
           </div>
+
+          <div class="chat-detail-view" id="chatDetailView">
+            <div class="detail-header">
+              <button class="icon-button back-button" id="detailBackBtn" type="button" aria-label="返回聊天">‹</button>
+              <h2>角色详情</h2>
+              <button class="text-button" id="editRoleBtn" type="button">编辑角色</button>
+            </div>
+
+            <section class="detail-profile">
+              <div class="detail-avatar" id="detailAvatar" aria-label="角色头像"></div>
+              <strong id="detailRoleName">未命名角色</strong>
+              <span id="detailGender">未设置性别</span>
+              <div class="detail-avatar-actions">
+                <label class="secondary avatar-upload" for="detailAvatarInput">
+                  <input id="detailAvatarInput" type="file" accept="image/*" />
+                  更换头像
+                </label>
+                <button class="secondary" id="detailRemoveAvatarBtn" type="button">移除头像</button>
+              </div>
+            </section>
+
+            <label class="field">
+              <span>我的备注</span>
+              <input id="detailRemarkInput" autocomplete="off" placeholder="例如：阿闻、从小一起长大的朋友" />
+            </label>
+
+            <div class="detail-summary">
+              <div>
+                <span>关系概况</span>
+                <p id="detailBasic"></p>
+              </div>
+              <div>
+                <span>性格画像</span>
+                <p id="detailPersona"></p>
+              </div>
+            </div>
+
+            <div class="section-head detail-material-head">
+              <h2>角色材料</h2>
+              <span class="count-pill" id="materialCount">0 条</span>
+            </div>
+
+            <label class="field">
+              <span>材料类型</span>
+              <select id="materialType">
+                <option value="chat">聊天记录</option>
+                <option value="memory">重要事件</option>
+                <option value="photo">照片时间线</option>
+                <option value="social">社交媒体</option>
+                <option value="correction">纠错记录</option>
+              </select>
+            </label>
+
+            <label class="field">
+              <span>粘贴文本</span>
+              <textarea id="materialInput" rows="6" placeholder="粘贴聊天、事件，或写几个印象最深的片段。"></textarea>
+            </label>
+
+            <label class="file-drop" for="fileInput">
+              <input id="fileInput" type="file" multiple accept=".txt,.md,.json,.csv" />
+              <strong>上传文本文件</strong>
+              <span>支持 txt / md / json / csv，只进入当前角色</span>
+            </label>
+
+            <div class="action-row">
+              <button class="primary" id="addMaterialBtn" type="button">加入材料</button>
+              <button class="secondary" id="clearMaterialsBtn" type="button">清空材料</button>
+            </div>
+
+            <div class="material-list" id="materialList"></div>
+          </div>
         </section>
       </main>
 
@@ -204,7 +233,6 @@
           <span class="tab-badge" id="chatUnreadBadge" hidden>0</span>
         </button>
         <button id="tab-create" type="button" data-panel="create">创建</button>
-        <button id="tab-materials" type="button" data-panel="materials">材料</button>
         <button id="tab-generate" type="button" data-panel="generate">生成</button>
       </nav>
     </div>

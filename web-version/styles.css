@@ -401,16 +401,24 @@ select:focus {
 }
 
 .chat-list-view,
-.chat-thread-view {
+.chat-thread-view,
+.chat-detail-view {
   display: none;
   min-height: 0;
   height: 100%;
 }
 
 .chat-list-view.active,
-.chat-thread-view.active {
+.chat-thread-view.active,
+.chat-detail-view.active {
   display: flex;
   flex-direction: column;
+}
+
+.chat-detail-view {
+  overflow: auto;
+  padding: 2px 2px 18px;
+  overscroll-behavior: contain;
 }
 
 .conversation-list {
@@ -537,6 +545,15 @@ select:focus {
   font-size: 16px;
 }
 
+.details-button {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  box-shadow: none;
+  font-size: 20px;
+  font-weight: 900;
+}
+
 .voice-toggle.active {
   border-color: var(--accent);
   background: #dcebe4;
@@ -552,6 +569,95 @@ select:focus {
     url("./assets/avatar.svg") center / cover,
     linear-gradient(135deg, #c9d8d1, #826f62);
   border: 1px solid rgba(47, 111, 94, 0.28);
+}
+
+.detail-header {
+  display: grid;
+  grid-template-columns: 42px 1fr auto;
+  gap: 10px;
+  align-items: center;
+  margin: 8px 2px 14px;
+}
+
+.detail-header h2 {
+  text-align: center;
+}
+
+.detail-profile {
+  display: grid;
+  justify-items: center;
+  gap: 7px;
+  padding: 18px 12px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.detail-avatar {
+  width: 82px;
+  height: 82px;
+  border-radius: 50%;
+  background:
+    linear-gradient(135deg, rgba(255,255,255,.35), transparent 45%),
+    url("./assets/avatar.svg") center / cover,
+    linear-gradient(135deg, #c9d8d1, #826f62);
+  border: 1px solid rgba(47, 111, 94, 0.28);
+}
+
+.detail-profile strong {
+  font-size: 18px;
+}
+
+.detail-profile > span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.detail-avatar-actions {
+  width: min(100%, 290px);
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.detail-avatar-actions .secondary {
+  min-height: 40px;
+  display: grid;
+  place-items: center;
+  text-align: center;
+}
+
+.detail-summary {
+  display: grid;
+  gap: 1px;
+  margin-bottom: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--line);
+}
+
+.detail-summary > div {
+  padding: 12px;
+  background: rgba(255, 253, 248, 0.96);
+}
+
+.detail-summary span {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.detail-summary p {
+  min-height: 20px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+.detail-material-head {
+  margin-top: 2px;
 }
 
 .chat-log {
@@ -673,7 +779,7 @@ select:focus {
 
 .tabbar {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 6px;
   padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
   border-top: 1px solid rgba(222, 212, 199, 0.92);

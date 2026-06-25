@@ -16,6 +16,7 @@ const state = {
     slug: "",
     gender: "",
     avatarId: "",
+    remark: "",
     basic: "",
     persona: "",
     tags: [],
@@ -72,6 +73,7 @@ function blankRole() {
     slug: "",
     gender: "",
     avatarId: "",
+    remark: "",
     basic: "",
     persona: "",
     tags: [],
@@ -91,6 +93,10 @@ function blankOutputs() {
 
 function roleKeyFromRole(role = state.role) {
   return role.slug || slugify(role.name || "unnamed-role");
+}
+
+function displayRoleName(role = state.role) {
+  return role.remark?.trim() || role.name || "未命名角色";
 }
 
 function snapshotCurrentRole() {
@@ -145,7 +151,6 @@ function renderUnreadBadges() {
 function renderLocalRoleSelectors() {
   const selects = [
     els.localRoleSelect,
-    els.materialRoleSelect,
     els.generateRoleSelect,
   ].filter(Boolean);
   const entries = Object.entries(state.roles || {}).sort(([, a], [, b]) =>
@@ -156,7 +161,7 @@ function renderLocalRoleSelectors() {
     entries.forEach(([key, snapshot]) => {
       const option = document.createElement("option");
       option.value = key;
-      option.textContent = snapshot.role?.name || key;
+      option.textContent = displayRoleName(snapshot.role || { name: key });
       select.appendChild(option);
     });
     select.value = state.activeRoleKey || "";
@@ -201,6 +206,10 @@ function loadState() {
   try {
     const next = JSON.parse(raw);
     Object.assign(state, next);
+    if (state.activePanel === "materials") {
+      state.activePanel = "chat";
+      state.chatView = state.role?.name ? "detail" : "list";
+    }
     state.storage = { ...state.storage, ...(next.storage || {}) };
     state.storage.userId = state.storage.userId || createLocalUserId();
     state.roles = next.roles || {};
@@ -288,6 +297,7 @@ async function loadCharacter(slug) {
     slug: character.slug,
     gender: character.meta?.profile?.gender || "",
     avatarId: "",
+    remark: "",
     basic: character.meta?.impression || character.meta?.profile?.relationship_type || "",
     persona: [
       character.meta?.impression,
@@ -339,6 +349,13 @@ function openChatRole(key) {
   if (state.activeRoleKey && state.roles[state.activeRoleKey]) {
     state.roles[state.activeRoleKey].unread = 0;
   }
+  renderChat();
+  saveState();
+}
+
+function openRoleDetails() {
+  if (!ensureNamedRole()) return;
+  state.chatView = "detail";
   renderChat();
   saveState();
 }
@@ -533,6 +550,7 @@ ${materialSummary("correction")}
     version: state.role.version || "v1",
     profile: {
       gender: state.role.gender || "",
+      remark: state.role.remark || "",
       basic: state.role.basic,
       persona: state.role.persona,
     },
@@ -612,7 +630,7 @@ function renderConversationList() {
         <span class="conversation-badge" hidden>0</span>
       </span>
     `;
-    item.querySelector("strong").textContent = snapshot.role?.name || key;
+    item.querySelector("strong").textContent = displayRoleName(snapshot.role || { name: key });
     applyRoleAvatar(item.querySelector(".conversation-avatar"), snapshot.role || {});
     item.querySelector("small").textContent = lastMessageText(snapshot);
     item.querySelector(".conversation-time").textContent = snapshot.updatedAt
@@ -628,15 +646,20 @@ function renderConversationList() {
 
 function renderChat() {
   renderUnreadBadges();
-  const isList = state.chatView !== "thread";
+  const isList = state.chatView === "list";
+  const isDetail = state.chatView === "detail";
   els.chatListView.classList.toggle("active", isList);
-  els.chatThreadView.classList.toggle("active", !isList);
+  els.chatThreadView.classList.toggle("active", !isList && !isDetail);
+  els.chatDetailView.classList.toggle("active", isDetail);
   if (isList) {
     renderConversationList();
     return;
   }
-  const name = state.role.name || "未命名角色";
-  els.chatName.textContent = name;
+  if (isDetail) {
+    renderRoleDetails();
+    return;
+  }
+  els.chatName.textContent = displayRoleName();
   applyRoleAvatar(els.chatAvatar, state.role);
   els.autoVoiceBtn.classList.toggle("active", Boolean(state.role.voiceAuto));
   els.autoVoiceBtn.setAttribute("aria-pressed", String(Boolean(state.role.voiceAuto)));
@@ -676,6 +699,21 @@ function renderChat() {
     els.chatLog.appendChild(bubble);
   });
   els.chatLog.scrollTop = els.chatLog.scrollHeight;
+}
+
+function renderRoleDetails() {
+  const genderLabel = state.role.gender === "male"
+    ? "男"
+    : state.role.gender === "female"
+      ? "女"
+      : "未设置性别";
+  els.detailRoleName.textContent = state.role.name || "未命名角色";
+  els.detailGender.textContent = genderLabel;
+  els.detailRemarkInput.value = state.role.remark || "";
+  els.detailBasic.textContent = state.role.basic || "暂未填写";
+  els.detailPersona.textContent = state.role.persona || "暂未填写";
+  applyRoleAvatar(els.detailAvatar, state.role);
+  renderMaterials();
 }
 
 const AUDIO_DB_NAME = "create-ex-audio";
@@ -1126,6 +1164,7 @@ function loadSample() {
     slug: "sample-lin-zhi-xia",
     gender: "female",
     avatarId: "",
+    remark: "",
     basic: "大学时期认识的朋友，长期保持微信联系。她在国内，用户在海外。关系亲近但有边界，适合作为移动端流程示例。",
     persona: "温和、清醒、会接住情绪，也会轻轻打趣。默认短句回复，像微信聊天，不一次性说太多。",
     tags: ["温柔", "行动型关心", "克制", "会打趣", "有边界感"],
@@ -1150,6 +1189,45 @@ function loadSample() {
   renderChat();
   saveState();
   toast("已载入示例");
+}
+
+async function updateCurrentRoleAvatar(file) {
+  if (!file?.type.startsWith("image/")) {
+    toast("请选择图片文件");
+    return;
+  }
+  try {
+    const oldAvatarId = state.role.avatarId;
+    const blob = await imageFileToAvatarBlob(file);
+    state.role.avatarId = await saveMediaBlob(AVATAR_STORE_NAME, blob);
+    if (oldAvatarId) {
+      const oldUrl = avatarObjectUrls.get(oldAvatarId);
+      if (oldUrl) URL.revokeObjectURL(oldUrl);
+      avatarObjectUrls.delete(oldAvatarId);
+      await deleteMediaBlob(AVATAR_STORE_NAME, oldAvatarId);
+    }
+    syncInputs();
+    renderChat();
+    saveState();
+    toast("头像已更新");
+  } catch {
+    toast("头像处理失败，请换一张图片");
+  }
+}
+
+async function removeCurrentRoleAvatar() {
+  const avatarId = state.role.avatarId;
+  state.role.avatarId = "";
+  if (avatarId) {
+    const oldUrl = avatarObjectUrls.get(avatarId);
+    if (oldUrl) URL.revokeObjectURL(oldUrl);
+    avatarObjectUrls.delete(avatarId);
+    await deleteMediaBlob(AVATAR_STORE_NAME, avatarId).catch(() => {});
+  }
+  syncInputs();
+  renderChat();
+  saveState();
+  toast("已恢复默认头像");
 }
 
 function bindEvents() {
@@ -1186,43 +1264,17 @@ function bindEvents() {
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) return;
-    if (!file.type.startsWith("image/")) {
-      toast("请选择图片文件");
-      return;
-    }
-    try {
-      const oldAvatarId = state.role.avatarId;
-      const blob = await imageFileToAvatarBlob(file);
-      state.role.avatarId = await saveMediaBlob(AVATAR_STORE_NAME, blob);
-      if (oldAvatarId) {
-        const oldUrl = avatarObjectUrls.get(oldAvatarId);
-        if (oldUrl) URL.revokeObjectURL(oldUrl);
-        avatarObjectUrls.delete(oldAvatarId);
-        await deleteMediaBlob(AVATAR_STORE_NAME, oldAvatarId);
-      }
-      syncInputs();
-      renderChat();
-      saveState();
-      toast("头像已更新");
-    } catch {
-      toast("头像处理失败，请换一张图片");
-    }
+    await updateCurrentRoleAvatar(file);
   });
 
-  els.removeAvatarBtn.addEventListener("click", async () => {
-    const avatarId = state.role.avatarId;
-    state.role.avatarId = "";
-    if (avatarId) {
-      const oldUrl = avatarObjectUrls.get(avatarId);
-      if (oldUrl) URL.revokeObjectURL(oldUrl);
-      avatarObjectUrls.delete(avatarId);
-      await deleteMediaBlob(AVATAR_STORE_NAME, avatarId).catch(() => {});
-    }
-    syncInputs();
-    renderChat();
-    saveState();
-    toast("已恢复默认头像");
+  els.removeAvatarBtn.addEventListener("click", removeCurrentRoleAvatar);
+  els.detailAvatarInput.addEventListener("change", async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    await updateCurrentRoleAvatar(file);
   });
+  els.detailRemoveAvatarBtn.addEventListener("click", removeCurrentRoleAvatar);
 
   els.characterSelect.addEventListener("change", async () => {
     try {
@@ -1232,7 +1284,7 @@ function bindEvents() {
     }
   });
 
-  [els.localRoleSelect, els.materialRoleSelect, els.generateRoleSelect].forEach((select) => {
+  [els.localRoleSelect, els.generateRoleSelect].forEach((select) => {
     select.addEventListener("change", () => {
       switchLocalRole(select.value);
     });
@@ -1274,6 +1326,22 @@ function bindEvents() {
     window.speechSynthesis?.cancel();
     state.chatView = "list";
     renderChat();
+    saveState();
+  });
+  els.chatDetailsBtn.addEventListener("click", openRoleDetails);
+  els.detailBackBtn.addEventListener("click", () => {
+    state.chatView = "thread";
+    renderChat();
+    saveState();
+  });
+  els.editRoleBtn.addEventListener("click", () => {
+    state.activePanel = "create";
+    renderPanels();
+    syncInputs();
+    saveState();
+  });
+  els.detailRemarkInput.addEventListener("input", () => {
+    state.role.remark = els.detailRemarkInput.value.trim();
     saveState();
   });
   els.autoVoiceBtn.addEventListener("click", () => {
@@ -1410,7 +1478,6 @@ function cacheElements() {
     "toast",
     "characterSelect",
     "localRoleSelect",
-    "materialRoleSelect",
     "generateRoleSelect",
     "nameInput",
     "avatarPreview",
@@ -1436,10 +1503,12 @@ function cacheElements() {
     "exportAllBtn",
     "chatListView",
     "chatThreadView",
+    "chatDetailView",
     "conversationList",
     "chatUnreadBadge",
     "chatNewRoleBtn",
     "chatBackBtn",
+    "chatDetailsBtn",
     "chatName",
     "chatAvatar",
     "chatContext",
@@ -1448,6 +1517,16 @@ function cacheElements() {
     "chatInput",
     "autoVoiceBtn",
     "voiceInputBtn",
+    "detailBackBtn",
+    "editRoleBtn",
+    "detailAvatar",
+    "detailAvatarInput",
+    "detailRemoveAvatarBtn",
+    "detailRoleName",
+    "detailGender",
+    "detailRemarkInput",
+    "detailBasic",
+    "detailPersona",
   ].forEach((id) => {
     els[id] = $(id);
   });
