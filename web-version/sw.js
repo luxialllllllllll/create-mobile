@@ -1,4 +1,4 @@
-const CACHE_NAME = "create-ex-mobile-v17";
+const CACHE_NAME = "create-ex-mobile-v18";
 const ASSETS = [
   "./",
   "./index.html",

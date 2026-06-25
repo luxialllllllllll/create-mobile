@@ -426,7 +426,13 @@ function renderPanels() {
   document.querySelectorAll(".tabbar button").forEach((button) => {
     button.classList.toggle("active", button.dataset.panel === state.activePanel);
   });
+  updateShellMode();
   renderUnreadBadges();
+}
+
+function updateShellMode() {
+  const focused = state.activePanel === "chat" && state.chatView !== "list";
+  document.querySelector(".app-shell")?.classList.toggle("focused-view", focused);
 }
 
 function appendMessageToRole(key, message, unread = false) {
@@ -700,6 +706,7 @@ function renderChat() {
   renderUnreadBadges();
   const isList = state.chatView === "list";
   const isDetail = state.chatView === "detail";
+  updateShellMode();
   els.chatListView.classList.toggle("active", isList);
   els.chatThreadView.classList.toggle("active", !isList && !isDetail);
   els.chatDetailView.classList.toggle("active", isDetail);
@@ -712,22 +719,21 @@ function renderChat() {
     return;
   }
   els.chatName.textContent = displayRoleName();
-  applyRoleAvatar(els.chatAvatar, state.role);
-  els.autoVoiceBtn.classList.toggle("active", Boolean(state.role.voiceAuto));
-  els.autoVoiceBtn.setAttribute("aria-pressed", String(Boolean(state.role.voiceAuto)));
-  if (state.server.online && state.server.hasApiKey) {
-    els.chatContext.textContent = `${state.role.slug || "local"} · ${state.server.provider}/${state.server.model}`;
-  } else if (state.server.online) {
-    els.chatContext.textContent = `${state.role.slug || "local"} · 后端已连接，缺 API Key`;
-  } else {
-    els.chatContext.textContent = `${state.role.slug || "local"} · 本地预览`;
-  }
   clearAudioObjectUrls();
   els.chatLog.innerHTML = "";
   const messages = state.chat.length ? state.chat : [
     { who: "bot", text: "角色还在草稿里。\n先填信息，我再陪你试聊。" },
   ];
   messages.forEach((message) => {
+    const row = document.createElement("div");
+    row.className = `message-row ${message.who}`;
+    const avatar = document.createElement("div");
+    avatar.className = `message-avatar ${message.who === "user" ? "user-avatar" : "role-avatar"}`;
+    avatar.setAttribute("aria-hidden", "true");
+    applyRoleAvatar(
+      avatar,
+      message.who === "user" ? (state.userProfile || blankUserProfile()) : state.role
+    );
     const bubble = document.createElement("div");
     bubble.className = `bubble ${message.who}`;
     if (message.type === "audio" && message.audioId) {
@@ -748,7 +754,8 @@ function renderChat() {
         }
       });
     }
-    els.chatLog.appendChild(bubble);
+    row.append(avatar, bubble);
+    els.chatLog.appendChild(row);
   });
   els.chatLog.scrollTop = els.chatLog.scrollHeight;
 }
@@ -765,6 +772,9 @@ function renderRoleDetails() {
   els.detailBasic.textContent = state.role.basic || "暂未填写";
   els.detailPersona.textContent = state.role.persona || "暂未填写";
   applyRoleAvatar(els.detailAvatar, state.role);
+  els.autoVoiceBtn.classList.toggle("active", Boolean(state.role.voiceAuto));
+  els.autoVoiceBtn.setAttribute("aria-pressed", String(Boolean(state.role.voiceAuto)));
+  els.autoVoiceBtn.textContent = `自动朗读角色回复：${state.role.voiceAuto ? "开启" : "关闭"}`;
   renderMaterials();
 }
 
@@ -1454,7 +1464,7 @@ function bindEvents() {
     renderChat();
     saveState();
   });
-  els.chatDetailsBtn.addEventListener("click", openRoleDetails);
+  els.chatNameBtn.addEventListener("click", openRoleDetails);
   els.detailBackBtn.addEventListener("click", () => {
     state.chatView = "thread";
     renderChat();
@@ -1472,7 +1482,7 @@ function bindEvents() {
   });
   els.autoVoiceBtn.addEventListener("click", () => {
     state.role.voiceAuto = !state.role.voiceAuto;
-    renderChat();
+    renderRoleDetails();
     saveState();
     toast(state.role.voiceAuto ? "已开启自动朗读" : "已关闭自动朗读");
   });
@@ -1634,10 +1644,8 @@ function cacheElements() {
     "chatUnreadBadge",
     "chatNewRoleBtn",
     "chatBackBtn",
-    "chatDetailsBtn",
+    "chatNameBtn",
     "chatName",
-    "chatAvatar",
-    "chatContext",
     "chatLog",
     "chatForm",
     "chatInput",

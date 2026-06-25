@@ -183,13 +183,10 @@
           <div class="chat-thread-view" id="chatThreadView">
             <div class="chat-header">
               <button class="icon-button back-button" id="chatBackBtn" type="button" aria-label="返回聊天列表">‹</button>
-              <div class="avatar-asset" id="chatAvatar" aria-hidden="true"></div>
-              <div class="chat-heading">
-                <h2 id="chatName">未命名角色</h2>
-                <p id="chatContext">微信式聊天 · 后端未连接</p>
-              </div>
-              <button class="icon-button details-button" id="chatDetailsBtn" type="button" aria-label="角色详情" title="角色详情">⋯</button>
-              <button class="icon-button voice-toggle" id="autoVoiceBtn" type="button" aria-label="自动朗读角色回复" title="自动朗读角色回复" aria-pressed="false">&#128266;</button>
+              <button class="chat-title-button" id="chatNameBtn" type="button" aria-label="打开角色详情">
+                <span id="chatName">未命名角色</span>
+              </button>
+              <span class="chat-header-spacer" aria-hidden="true"></span>
             </div>
 
             <div class="chat-log" id="chatLog" aria-live="polite"></div>
@@ -225,6 +222,8 @@
               <span>我的备注</span>
               <input id="detailRemarkInput" autocomplete="off" placeholder="例如：阿闻、从小一起长大的朋友" />
             </label>
+
+            <button class="secondary detail-voice-toggle" id="autoVoiceBtn" type="button" aria-pressed="false">自动朗读角色回复：关闭</button>
 
             <div class="detail-summary">
               <div>
