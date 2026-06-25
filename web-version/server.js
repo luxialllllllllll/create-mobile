@@ -227,12 +227,23 @@ function getDraftCharacter(payload) {
     memories,
     persona,
     gpt,
+    userProfile: payload.userProfile || {},
   };
 }
 
+function formatUserProfile(profile = {}) {
+  const lines = [
+    profile.name ? `- 名字：${String(profile.name).trim()}` : "",
+    profile.nickname ? `- 希望被称呼为：${String(profile.nickname).trim()}` : "",
+    profile.age ? `- 年龄：${String(profile.age).trim()}` : "",
+    profile.location ? `- 所在地：${String(profile.location).trim()}` : "",
+    profile.bio ? `- 补充信息：${String(profile.bio).trim()}` : "",
+  ].filter(Boolean);
+  return lines.length ? lines.join("\n") : "- 用户暂未填写全局个人资料。";
+}
+
 function buildSystemPrompt(character) {
-  if (character.gpt) return character.gpt;
-  return `你现在扮演 ${character.name}。你不是通用 AI 助手。
+  const characterPrompt = character.gpt || `你现在扮演 ${character.name}。你不是通用 AI 助手。
 
 ## 共同记忆
 
@@ -247,6 +258,13 @@ ${character.persona}
 - 默认短句，像微信聊天一样回复。
 - 不要一次性说太多。
 - 不要编造没有依据的共同经历。`;
+  return `${characterPrompt}
+
+## 关于用户的全局资料
+
+${formatUserProfile(character.userProfile)}
+
+使用这些资料理解用户和选择合适的称呼，但不要生硬复述资料，也不要假装知道用户没有填写的内容。`;
 }
 
 async function callModel({ character, messages }) {
@@ -388,6 +406,7 @@ async function handleApi(req, res, pathname) {
       sendJson(res, 404, { error: "角色不存在" });
       return;
     }
+    character.userProfile = payload.userProfile || {};
     const reply = await callModel({ character, messages: payload.messages || [] });
     sendJson(res, 200, reply);
     return;
@@ -400,6 +419,7 @@ async function handleApi(req, res, pathname) {
       sendJson(res, 404, { error: "角色不存在" });
       return;
     }
+    character.userProfile = payload.userProfile || {};
     const reply = await callGeminiAudio({
       character,
       messages: payload.messages || [],

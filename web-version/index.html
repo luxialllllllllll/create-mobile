@@ -124,6 +124,53 @@
           </div>
         </section>
 
+        <section class="panel" id="panel-profile" aria-labelledby="tab-profile">
+          <div class="section-head">
+            <h2>关于我</h2>
+            <span class="count-pill">全局</span>
+          </div>
+
+          <p class="profile-intro">这里的资料会提供给所有角色，修改一次即可全局生效。</p>
+
+          <div class="profile-hero">
+            <div class="profile-avatar" id="profileAvatar" aria-label="我的头像"></div>
+            <div class="profile-avatar-actions">
+              <label class="secondary avatar-upload" for="profileAvatarInput">
+                <input id="profileAvatarInput" type="file" accept="image/*" />
+                更换头像
+              </label>
+              <button class="secondary" id="removeProfileAvatarBtn" type="button">移除头像</button>
+            </div>
+          </div>
+
+          <label class="field">
+            <span>名字</span>
+            <input id="profileNameInput" autocomplete="name" placeholder="你的名字" />
+          </label>
+
+          <label class="field">
+            <span>希望角色怎么称呼我</span>
+            <input id="profileNicknameInput" autocomplete="off" placeholder="例如：小夏、宝宝、你的名字" />
+          </label>
+
+          <label class="field">
+            <span>年龄</span>
+            <input id="profileAgeInput" type="number" inputmode="numeric" min="1" max="120" placeholder="例如：22" />
+          </label>
+
+          <label class="field">
+            <span>所在地</span>
+            <input id="profileLocationInput" autocomplete="off" placeholder="例如：葡萄牙里斯本" />
+          </label>
+
+          <label class="field">
+            <span>关于我的补充</span>
+            <textarea id="profileBioInput" rows="6" placeholder="性格、生活状态、喜好、雷区，以及希望所有角色都知道的信息。"></textarea>
+          </label>
+
+          <button class="primary profile-save" id="saveProfileBtn" type="button">保存我的资料</button>
+        </section>
+
         <section class="panel active" id="panel-chat" aria-labelledby="tab-chat">
           <div class="chat-list-view" id="chatListView">
             <div class="section-head">
@@ -234,6 +281,7 @@
         </button>
         <button id="tab-create" type="button" data-panel="create">创建</button>
         <button id="tab-generate" type="button" data-panel="generate">生成</button>
+        <button id="tab-profile" type="button" data-panel="profile">我的</button>
       </nav>
     </div>
 

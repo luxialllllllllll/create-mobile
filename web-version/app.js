@@ -7,6 +7,14 @@ const state = {
     userId: "",
     savedAt: "",
   },
+  userProfile: {
+    name: "",
+    nickname: "",
+    age: "",
+    location: "",
+    bio: "",
+    avatarId: "",
+  },
   roles: {},
   activeRoleKey: "",
   chatView: "list",
@@ -88,6 +96,17 @@ function blankOutputs() {
     persona: "",
     meta: "",
     gpt: "",
+  };
+}
+
+function blankUserProfile() {
+  return {
+    name: "",
+    nickname: "",
+    age: "",
+    location: "",
+    bio: "",
+    avatarId: "",
   };
 }
 
@@ -212,6 +231,7 @@ function loadState() {
     }
     state.storage = { ...state.storage, ...(next.storage || {}) };
     state.storage.userId = state.storage.userId || createLocalUserId();
+    state.userProfile = { ...blankUserProfile(), ...(next.userProfile || {}) };
     state.roles = next.roles || {};
     state.role = { ...state.role, ...(next.role || {}) };
     state.outputs = { ...state.outputs, ...(next.outputs || {}) };
@@ -243,6 +263,38 @@ function syncInputs() {
     button.classList.toggle("active", state.role.tags.includes(button.dataset.tag));
   });
   renderLocalRoleSelectors();
+}
+
+function syncProfileInputs() {
+  const profile = state.userProfile || blankUserProfile();
+  els.profileNameInput.value = profile.name || "";
+  els.profileNicknameInput.value = profile.nickname || "";
+  els.profileAgeInput.value = profile.age || "";
+  els.profileLocationInput.value = profile.location || "";
+  els.profileBioInput.value = profile.bio || "";
+  applyRoleAvatar(els.profileAvatar, profile);
+}
+
+function syncProfileFromInputs() {
+  state.userProfile = {
+    ...(state.userProfile || blankUserProfile()),
+    name: els.profileNameInput.value.trim(),
+    nickname: els.profileNicknameInput.value.trim(),
+    age: els.profileAgeInput.value.trim(),
+    location: els.profileLocationInput.value.trim(),
+    bio: els.profileBioInput.value.trim(),
+  };
+}
+
+function userProfileForModel() {
+  const profile = state.userProfile || blankUserProfile();
+  return {
+    name: profile.name || "",
+    nickname: profile.nickname || "",
+    age: profile.age || "",
+    location: profile.location || "",
+    bio: profile.bio || "",
+  };
 }
 
 async function api(path, options = {}) {
@@ -979,6 +1031,7 @@ async function sendVoiceChat(blob, replyRoleKey) {
     body: JSON.stringify({
       slug: state.selectedCharacter || "",
       character,
+      userProfile: userProfileForModel(),
       messages,
       audio: {
         mimeType: "audio/wav",
@@ -1131,7 +1184,12 @@ async function sendRealChat(text) {
   };
   const data = await api("/api/chat", {
     method: "POST",
-    body: JSON.stringify({ slug: state.selectedCharacter || "", character, messages }),
+    body: JSON.stringify({
+      slug: state.selectedCharacter || "",
+      character,
+      userProfile: userProfileForModel(),
+      messages,
+    }),
   });
   return data.content;
 }
@@ -1230,6 +1288,49 @@ async function removeCurrentRoleAvatar() {
   toast("已恢复默认头像");
 }
 
+async function updateUserProfileAvatar(file) {
+  if (!file?.type.startsWith("image/")) {
+    toast("请选择图片文件");
+    return;
+  }
+  try {
+    const oldAvatarId = state.userProfile?.avatarId || "";
+    const blob = await imageFileToAvatarBlob(file);
+    state.userProfile = {
+      ...(state.userProfile || blankUserProfile()),
+      avatarId: await saveMediaBlob(AVATAR_STORE_NAME, blob),
+    };
+    if (oldAvatarId) {
+      const oldUrl = avatarObjectUrls.get(oldAvatarId);
+      if (oldUrl) URL.revokeObjectURL(oldUrl);
+      avatarObjectUrls.delete(oldAvatarId);
+      await deleteMediaBlob(AVATAR_STORE_NAME, oldAvatarId);
+    }
+    syncProfileInputs();
+    saveState();
+    toast("我的头像已更新");
+  } catch {
+    toast("头像处理失败，请换一张图片");
+  }
+}
+
+async function removeUserProfileAvatar() {
+  const avatarId = state.userProfile?.avatarId || "";
+  state.userProfile = {
+    ...(state.userProfile || blankUserProfile()),
+    avatarId: "",
+  };
+  if (avatarId) {
+    const oldUrl = avatarObjectUrls.get(avatarId);
+    if (oldUrl) URL.revokeObjectURL(oldUrl);
+    avatarObjectUrls.delete(avatarId);
+    await deleteMediaBlob(AVATAR_STORE_NAME, avatarId).catch(() => {});
+  }
+  syncProfileInputs();
+  saveState();
+  toast("已恢复默认头像");
+}
+
 function bindEvents() {
   document.querySelectorAll(".tabbar button").forEach((button) => {
     button.addEventListener("click", () => {
@@ -1238,6 +1339,7 @@ function bindEvents() {
       renderPanels();
       if (state.activePanel === "generate") renderOutputs();
       if (state.activePanel === "chat") renderChat();
+      if (state.activePanel === "profile") syncProfileInputs();
       saveState();
     });
   });
@@ -1275,6 +1377,30 @@ function bindEvents() {
     await updateCurrentRoleAvatar(file);
   });
   els.detailRemoveAvatarBtn.addEventListener("click", removeCurrentRoleAvatar);
+  els.profileAvatarInput.addEventListener("change", async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    await updateUserProfileAvatar(file);
+  });
+  els.removeProfileAvatarBtn.addEventListener("click", removeUserProfileAvatar);
+  [
+    els.profileNameInput,
+    els.profileNicknameInput,
+    els.profileAgeInput,
+    els.profileLocationInput,
+    els.profileBioInput,
+  ].forEach((input) => {
+    input.addEventListener("input", () => {
+      syncProfileFromInputs();
+      saveState();
+    });
+  });
+  els.saveProfileBtn.addEventListener("click", () => {
+    syncProfileFromInputs();
+    saveState();
+    toast("我的资料已保存，所有角色都会读取");
+  });
 
   els.characterSelect.addEventListener("change", async () => {
     try {
@@ -1527,6 +1653,15 @@ function cacheElements() {
     "detailRemarkInput",
     "detailBasic",
     "detailPersona",
+    "profileAvatar",
+    "profileAvatarInput",
+    "removeProfileAvatarBtn",
+    "profileNameInput",
+    "profileNicknameInput",
+    "profileAgeInput",
+    "profileLocationInput",
+    "profileBioInput",
+    "saveProfileBtn",
   ].forEach((id) => {
     els[id] = $(id);
   });
@@ -1538,6 +1673,7 @@ async function init() {
   await refreshServer();
   await refreshCharacters();
   syncInputs();
+  syncProfileInputs();
   renderPanels();
   renderMaterials();
   renderOutputs();

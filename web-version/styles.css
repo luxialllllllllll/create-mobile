@@ -398,6 +398,51 @@ select:focus {
   font-size: 12.5px;
 }
 
+.profile-intro {
+  margin: -3px 2px 16px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.profile-hero {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  padding: 8px 0 18px;
+}
+
+.profile-avatar {
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  background:
+    linear-gradient(135deg, rgba(255,255,255,.35), transparent 45%),
+    url("./assets/avatar.svg") center / cover,
+    linear-gradient(135deg, #d7cec1, #738e83);
+  border: 1px solid rgba(47, 111, 94, 0.28);
+}
+
+.profile-avatar-actions {
+  width: min(100%, 300px);
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.profile-avatar-actions .secondary {
+  min-height: 42px;
+  display: grid;
+  place-items: center;
+  text-align: center;
+}
+
+.profile-save {
+  width: 100%;
+  min-height: 46px;
+  margin: 2px 0 16px;
+}
+
 .chat-list-view,
 .chat-thread-view,
 .chat-detail-view {
@@ -777,7 +822,7 @@ select:focus {
 
 .tabbar {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 6px;
   padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
   border-top: 1px solid rgba(222, 212, 199, 0.92);
