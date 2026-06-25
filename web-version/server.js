@@ -32,6 +32,7 @@ const SAMPLE_CHARACTER = {
     version: "v1",
     impression: "温和、清醒、会接住情绪，也会轻轻打趣。默认短句回复，像微信聊天。",
     profile: {
+      gender: "female",
       relationship_type: "大学时期认识的朋友，长期保持微信联系。她在国内，用户在海外。关系亲近但有边界。",
     },
   },

@@ -14,6 +14,7 @@ const state = {
   role: {
     name: "",
     slug: "",
+    gender: "",
     basic: "",
     persona: "",
     tags: [],
@@ -68,6 +69,7 @@ function blankRole() {
   return {
     name: "",
     slug: "",
+    gender: "",
     basic: "",
     persona: "",
     tags: [],
@@ -220,6 +222,11 @@ function syncInputs() {
   els.basicInput.value = state.role.basic;
   els.personaInput.value = state.role.persona;
   els.roleVersion.textContent = state.role.version || "v1";
+  document.querySelectorAll("[data-gender]").forEach((button) => {
+    const active = button.dataset.gender === state.role.gender;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", String(active));
+  });
   document.querySelectorAll("[data-tag]").forEach((button) => {
     button.classList.toggle("active", state.role.tags.includes(button.dataset.tag));
   });
@@ -276,6 +283,7 @@ async function loadCharacter(slug) {
   state.role = {
     name: character.name,
     slug: character.slug,
+    gender: character.meta?.profile?.gender || "",
     basic: character.meta?.impression || character.meta?.profile?.relationship_type || "",
     persona: [
       character.meta?.impression,
@@ -409,6 +417,11 @@ function generateOutputs(allowTemplate = true) {
   const slug = state.role.slug || slugify(name);
   const today = new Date().toISOString().slice(0, 10);
   const tags = state.role.tags.length ? state.role.tags.join("、") : "（未填写）";
+  const genderLabel = state.role.gender === "male"
+    ? "男"
+    : state.role.gender === "female"
+      ? "女"
+      : "（未选择）";
   const coreRules = [
     state.role.persona || "（根据补充材料继续提炼性格规则）",
     state.role.tags.includes("嘴毒但不伤人") ? "说话可以打趣和嘴毒，但不能真正攻击或羞辱对方。" : "",
@@ -465,6 +478,8 @@ ${coreRules.map((rule) => `- ${rule}`).join("\n")}
 
 你是 ${name}。
 
+性别：${genderLabel}
+
 基础设定：${state.role.basic || "（待补充）"}
 
 标签：${tags}
@@ -513,6 +528,7 @@ ${materialSummary("correction")}
     updated_at: today,
     version: state.role.version || "v1",
     profile: {
+      gender: state.role.gender || "",
       basic: state.role.basic,
       persona: state.role.persona,
     },
@@ -813,6 +829,7 @@ function loadSample() {
   state.role = {
     name: "林知夏",
     slug: "sample-lin-zhi-xia",
+    gender: "female",
     basic: "大学时期认识的朋友，长期保持微信联系。她在国内，用户在海外。关系亲近但有边界，适合作为移动端流程示例。",
     persona: "温和、清醒、会接住情绪，也会轻轻打趣。默认短句回复，像微信聊天，不一次性说太多。",
     tags: ["温柔", "行动型关心", "克制", "会打趣", "有边界感"],
@@ -857,6 +874,15 @@ function bindEvents() {
       saveState();
       renderOutputs();
       renderChat();
+    });
+  });
+
+  document.querySelectorAll("[data-gender]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.role.gender = state.role.gender === button.dataset.gender ? "" : button.dataset.gender;
+      syncInputs();
+      renderOutputs();
+      saveState();
     });
   });
 
