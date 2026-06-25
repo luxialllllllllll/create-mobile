@@ -575,6 +575,7 @@ function renderOutputs(allowTemplate = true) {
 
 function lastMessageText(snapshot) {
   const last = snapshot.chat?.[snapshot.chat.length - 1];
+  if (last?.type === "audio") return `[语音] ${Math.max(1, Math.round(last.duration || 0))}″`;
   if (last?.text) return last.text.replace(/\s+/g, " ").slice(0, 34);
   if (snapshot.role?.basic) return snapshot.role.basic.slice(0, 34);
   return "还没有聊天记录";
@@ -640,6 +641,7 @@ function renderChat() {
   } else {
     els.chatContext.textContent = `${state.role.slug || "local"} · 本地预览`;
   }
+  clearAudioObjectUrls();
   els.chatLog.innerHTML = "";
   const messages = state.chat.length ? state.chat : [
     { who: "bot", text: "角色还在草稿里。\n先填信息，我再陪你试聊。" },
@@ -647,8 +649,12 @@ function renderChat() {
   messages.forEach((message) => {
     const bubble = document.createElement("div");
     bubble.className = `bubble ${message.who}`;
-    bubble.textContent = message.text;
-    if (message.who === "bot") {
+    if (message.type === "audio" && message.audioId) {
+      renderAudioBubble(bubble, message);
+    } else {
+      bubble.textContent = message.text;
+    }
+    if (message.who === "bot" && message.text) {
       bubble.tabIndex = 0;
       bubble.setAttribute("role", "button");
       bubble.setAttribute("aria-label", `朗读消息：${message.text}`);
@@ -666,82 +672,277 @@ function renderChat() {
   els.chatLog.scrollTop = els.chatLog.scrollHeight;
 }
 
-let activeRecognition = null;
-let voiceTranscript = "";
-let voiceShouldSend = false;
-
-function speechRecognitionClass() {
-  return window.SpeechRecognition || window.webkitSpeechRecognition || null;
-}
+const AUDIO_DB_NAME = "create-ex-audio";
+const AUDIO_STORE_NAME = "clips";
+const audioObjectUrls = new Set();
+let voiceRecorder = null;
+let voiceReleaseRequested = false;
+let voiceAutoStopTimer = null;
 
 function setListening(active) {
   els.voiceInputBtn.classList.toggle("recording", active);
   els.chatForm.classList.toggle("listening", active);
-  els.voiceInputBtn.setAttribute("aria-label", active ? "松开发送" : "按住说话");
+  els.voiceInputBtn.setAttribute("aria-label", active ? "松开发送" : "按住录音");
+  els.voiceInputBtn.title = active ? "松开发送" : "按住录音";
 }
 
-function finishVoiceInput(send = true) {
-  voiceShouldSend = send;
-  setListening(false);
-  if (activeRecognition) {
-    try {
-      activeRecognition.stop();
-    } catch {
-      activeRecognition = null;
+function openAudioDb() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(AUDIO_DB_NAME, 1);
+    request.onupgradeneeded = () => {
+      if (!request.result.objectStoreNames.contains(AUDIO_STORE_NAME)) {
+        request.result.createObjectStore(AUDIO_STORE_NAME);
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function saveAudioBlob(blob) {
+  const id = crypto.randomUUID?.() || `audio-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const db = await openAudioDb();
+  await new Promise((resolve, reject) => {
+    const transaction = db.transaction(AUDIO_STORE_NAME, "readwrite");
+    transaction.objectStore(AUDIO_STORE_NAME).put(blob, id);
+    transaction.oncomplete = resolve;
+    transaction.onerror = () => reject(transaction.error);
+  });
+  db.close();
+  return id;
+}
+
+async function getAudioBlob(id) {
+  const db = await openAudioDb();
+  const blob = await new Promise((resolve, reject) => {
+    const request = db.transaction(AUDIO_STORE_NAME, "readonly").objectStore(AUDIO_STORE_NAME).get(id);
+    request.onsuccess = () => resolve(request.result || null);
+    request.onerror = () => reject(request.error);
+  });
+  db.close();
+  return blob;
+}
+
+function clearAudioObjectUrls() {
+  audioObjectUrls.forEach((url) => URL.revokeObjectURL(url));
+  audioObjectUrls.clear();
+}
+
+async function renderAudioBubble(bubble, message) {
+  bubble.classList.add("audio-bubble");
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "audio-message";
+  button.disabled = true;
+  button.innerHTML = `<span class="audio-wave" aria-hidden="true">)))</span><span>${Math.max(1, Math.round(message.duration || 0))}″</span>`;
+  bubble.appendChild(button);
+  try {
+    const blob = await getAudioBlob(message.audioId);
+    if (!blob) {
+      button.querySelector(".audio-wave").textContent = "!";
+      button.title = "这条语音不在当前设备上";
+      return;
     }
+    const objectUrl = URL.createObjectURL(blob);
+    audioObjectUrls.add(objectUrl);
+    const audio = new Audio(objectUrl);
+    button.disabled = false;
+    button.setAttribute("aria-label", `播放语音，${Math.max(1, Math.round(message.duration || 0))}秒`);
+    button.addEventListener("click", () => {
+      document.querySelectorAll(".audio-message.playing").forEach((node) => node.classList.remove("playing"));
+      if (!audio.paused) {
+        audio.pause();
+        audio.currentTime = 0;
+        button.classList.remove("playing");
+        return;
+      }
+      button.classList.add("playing");
+      audio.play().catch(() => toast("语音播放失败"));
+    });
+    audio.addEventListener("ended", () => button.classList.remove("playing"));
+    audio.addEventListener("pause", () => button.classList.remove("playing"));
+  } catch {
+    button.querySelector(".audio-wave").textContent = "!";
+    button.title = "语音读取失败";
   }
 }
 
-function startVoiceInput(event) {
-  event.preventDefault();
-  if (!ensureNamedRole()) return;
-  const Recognition = speechRecognitionClass();
-  if (!Recognition) {
-    toast("当前浏览器不支持语音识别，请用最新版 Chrome 或 Safari");
+function mergeAudioChunks(chunks) {
+  const length = chunks.reduce((total, chunk) => total + chunk.length, 0);
+  const samples = new Float32Array(length);
+  let offset = 0;
+  chunks.forEach((chunk) => {
+    samples.set(chunk, offset);
+    offset += chunk.length;
+  });
+  return samples;
+}
+
+function encodeWav(samples, sampleRate) {
+  const buffer = new ArrayBuffer(44 + samples.length * 2);
+  const view = new DataView(buffer);
+  const writeString = (offset, value) => {
+    for (let index = 0; index < value.length; index += 1) view.setUint8(offset + index, value.charCodeAt(index));
+  };
+  writeString(0, "RIFF");
+  view.setUint32(4, 36 + samples.length * 2, true);
+  writeString(8, "WAVE");
+  writeString(12, "fmt ");
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * 2, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
+  writeString(36, "data");
+  view.setUint32(40, samples.length * 2, true);
+  let offset = 44;
+  samples.forEach((sample) => {
+    const clamped = Math.max(-1, Math.min(1, sample));
+    view.setInt16(offset, clamped < 0 ? clamped * 0x8000 : clamped * 0x7fff, true);
+    offset += 2;
+  });
+  return new Blob([buffer], { type: "audio/wav" });
+}
+
+function stopRecorderTracks(recorder) {
+  recorder.source?.disconnect();
+  recorder.processor?.disconnect();
+  recorder.stream?.getTracks().forEach((track) => track.stop());
+  recorder.context?.close().catch(() => {});
+}
+
+async function blobToBase64(blob) {
+  const buffer = await blob.arrayBuffer();
+  let binary = "";
+  const bytes = new Uint8Array(buffer);
+  const chunkSize = 0x8000;
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize));
+  }
+  return btoa(binary);
+}
+
+async function sendVoiceChat(blob, replyRoleKey) {
+  if (!state.server.online || !state.server.hasApiKey || state.server.provider !== "gemini") {
+    throw new Error("语音理解需要已配置的 Gemini API");
+  }
+  generateOutputs();
+  const character = {
+    name: state.role.name || "未命名角色",
+    slug: state.role.slug,
+    version: state.role.version || "draft",
+    memories: state.outputs.memories || "",
+    persona: state.outputs.persona || "",
+    gpt: state.outputs.gpt || "",
+  };
+  const messages = state.chat
+    .filter((message) => message.text)
+    .slice(-24)
+    .map((message) => ({
+      role: message.who === "bot" ? "assistant" : "user",
+      content: message.text,
+    }));
+  const data = await api("/api/chat/audio", {
+    method: "POST",
+    body: JSON.stringify({
+      slug: state.selectedCharacter || "",
+      character,
+      messages,
+      audio: {
+        mimeType: "audio/wav",
+        data: await blobToBase64(blob),
+      },
+    }),
+  });
+  const unread = !isViewingRoleThread(replyRoleKey);
+  appendMessageToRole(replyRoleKey, { who: "bot", text: data.content }, unread);
+  if (!unread && state.role.voiceAuto) speakText(data.content);
+}
+
+async function finishVoiceInput(send = true) {
+  voiceReleaseRequested = true;
+  if (!voiceRecorder) return;
+  const recorder = voiceRecorder;
+  voiceRecorder = null;
+  window.clearTimeout(voiceAutoStopTimer);
+  setListening(false);
+  stopRecorderTracks(recorder);
+  const duration = (Date.now() - recorder.startedAt) / 1000;
+  if (!send || duration < 0.45 || !recorder.chunks.length) {
+    if (duration < 0.45) toast("说话时间太短");
     return;
   }
-  if (activeRecognition) return;
-  window.speechSynthesis?.cancel();
-  voiceTranscript = "";
-  voiceShouldSend = false;
-  const recognition = new Recognition();
-  activeRecognition = recognition;
-  recognition.lang = "zh-CN";
-  recognition.continuous = true;
-  recognition.interimResults = true;
-  recognition.maxAlternatives = 1;
-  recognition.onstart = () => {
-    setListening(true);
-    els.chatInput.placeholder = "正在听，松开发送";
-  };
-  recognition.onresult = (resultEvent) => {
-    let transcript = "";
-    for (let index = 0; index < resultEvent.results.length; index += 1) {
-      transcript += resultEvent.results[index][0]?.transcript || "";
-    }
-    voiceTranscript = transcript;
-    els.chatInput.value = voiceTranscript.trim();
-  };
-  recognition.onerror = (errorEvent) => {
-    if (errorEvent.error !== "aborted" && errorEvent.error !== "no-speech") {
-      toast(errorEvent.error === "not-allowed" ? "请允许浏览器使用麦克风" : "没听清，再试一次");
-    }
-  };
-  recognition.onend = () => {
-    activeRecognition = null;
-    setListening(false);
-    els.chatInput.placeholder = "跟角色说点什么";
-    if (voiceShouldSend && els.chatInput.value.trim()) {
-      els.chatForm.requestSubmit();
-    }
-  };
+  const blob = encodeWav(mergeAudioChunks(recorder.chunks), recorder.sampleRate);
+  const audioId = await saveAudioBlob(blob);
+  const replyRoleKey = state.activeRoleKey || roleKeyFromRole();
+  state.chat.push({
+    who: "user",
+    type: "audio",
+    audioId,
+    duration,
+    mimeType: "audio/wav",
+    createdAt: new Date().toISOString(),
+  });
+  renderChat();
+  saveState();
   try {
-    recognition.start();
-    els.voiceInputBtn.setPointerCapture?.(event.pointerId);
-  } catch {
-    activeRecognition = null;
+    await sendVoiceChat(blob, replyRoleKey);
+  } catch (error) {
+    const unread = !isViewingRoleThread(replyRoleKey);
+    appendMessageToRole(replyRoleKey, { who: "bot", text: `语音发送出问题了。\n${error.message}` }, unread);
+  }
+  renderChat();
+  renderUnreadBadges();
+  saveState();
+}
+
+async function startVoiceInput(event) {
+  event.preventDefault();
+  if (!ensureNamedRole()) return;
+  if (!navigator.mediaDevices?.getUserMedia || !window.AudioContext && !window.webkitAudioContext) {
+    toast("当前浏览器不支持录音");
+    return;
+  }
+  if (voiceRecorder) return;
+  voiceReleaseRequested = false;
+  els.voiceInputBtn.setPointerCapture?.(event.pointerId);
+  window.speechSynthesis?.cancel();
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    const context = new AudioContextClass();
+    await context.resume();
+    const source = context.createMediaStreamSource(stream);
+    const processor = context.createScriptProcessor(4096, 1, 1);
+    const chunks = [];
+    processor.onaudioprocess = (audioEvent) => {
+      chunks.push(new Float32Array(audioEvent.inputBuffer.getChannelData(0)));
+    };
+    source.connect(processor);
+    processor.connect(context.destination);
+    voiceRecorder = {
+      stream,
+      context,
+      source,
+      processor,
+      chunks,
+      sampleRate: context.sampleRate,
+      startedAt: Date.now(),
+    };
+    setListening(true);
+    els.chatInput.placeholder = "正在录音，松开发送";
+    voiceAutoStopTimer = window.setTimeout(() => {
+      toast("语音最长 60 秒，已自动发送");
+      finishVoiceInput(true);
+    }, 60000);
+    if (voiceReleaseRequested) {
+      await finishVoiceInput(true);
+    }
+  } catch (error) {
     setListening(false);
-    toast("麦克风启动失败，请刷新后重试");
+    toast(error?.name === "NotAllowedError" ? "请允许浏览器使用麦克风" : "麦克风启动失败");
   }
 }
 
@@ -784,10 +985,12 @@ async function sendRealChat(text) {
   const slug = state.selectedCharacter || state.role.slug;
   if (!state.server.online || !state.server.hasApiKey || !slug) return null;
   generateOutputs();
-  const messages = state.chat.map((message) => ({
-    role: message.who === "bot" ? "assistant" : "user",
-    content: message.text,
-  }));
+  const messages = state.chat
+    .filter((message) => message.text)
+    .map((message) => ({
+      role: message.who === "bot" ? "assistant" : "user",
+      content: message.text,
+    }));
   const character = {
     name: state.role.name || "未命名角色",
     slug,
@@ -947,9 +1150,6 @@ function bindEvents() {
   els.voiceInputBtn.addEventListener("pointerdown", startVoiceInput);
   els.voiceInputBtn.addEventListener("pointerup", () => finishVoiceInput(true));
   els.voiceInputBtn.addEventListener("pointercancel", () => finishVoiceInput(false));
-  els.voiceInputBtn.addEventListener("lostpointercapture", () => {
-    if (activeRecognition) finishVoiceInput(true);
-  });
   els.voiceInputBtn.addEventListener("contextmenu", (event) => event.preventDefault());
 
   els.addMaterialBtn.addEventListener("click", () => {

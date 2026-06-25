@@ -289,6 +289,69 @@ async function callModel({ character, messages }) {
   };
 }
 
+async function callGeminiAudio({ character, messages, audio }) {
+  const config = getConfig();
+  if (config.provider !== "gemini") {
+    throw new Error("语音消息目前需要 Gemini API");
+  }
+  if (!config.apiKey) {
+    throw new Error("还没有配置 Gemini API Key");
+  }
+  if (!audio?.data || audio.mimeType !== "audio/wav") {
+    throw new Error("没有收到有效的 WAV 语音");
+  }
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(config.model)}:generateContent`;
+  const contents = messages.slice(-20).map((message) => ({
+    role: message.role === "assistant" ? "model" : "user",
+    parts: [{ text: String(message.content || "") }],
+  }));
+  contents.push({
+    role: "user",
+    parts: [
+      {
+        text: "这是用户刚刚发送的语音消息。请直接理解语音的内容、语气和情绪，并严格按照角色设定自然回复。不要输出转录稿，不要解释你在分析音频。",
+      },
+      {
+        inline_data: {
+          mime_type: audio.mimeType,
+          data: audio.data,
+        },
+      },
+    ],
+  });
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-goog-api-key": config.apiKey,
+    },
+    body: JSON.stringify({
+      system_instruction: {
+        parts: [{ text: buildSystemPrompt(character) }],
+      },
+      contents,
+      generation_config: {
+        temperature: 0.85,
+      },
+    }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.error?.message || `Gemini 音频请求失败：${response.status}`);
+  }
+  const content = (data.candidates?.[0]?.content?.parts || [])
+    .map((part) => part.text || "")
+    .join("")
+    .trim();
+  if (!content) throw new Error("Gemini 没有返回语音回复");
+  return {
+    content,
+    usage: data.usageMetadata || null,
+    provider: config.provider,
+    model: config.model,
+  };
+}
+
 async function handleApi(req, res, pathname) {
   if (pathname === "/api/health") {
     const config = getConfig();
@@ -326,6 +389,22 @@ async function handleApi(req, res, pathname) {
       return;
     }
     const reply = await callModel({ character, messages: payload.messages || [] });
+    sendJson(res, 200, reply);
+    return;
+  }
+
+  if (pathname === "/api/chat/audio" && req.method === "POST") {
+    const payload = await readJson(req);
+    const character = (await getCharacter(payload.slug)) || getDraftCharacter(payload);
+    if (!character) {
+      sendJson(res, 404, { error: "角色不存在" });
+      return;
+    }
+    const reply = await callGeminiAudio({
+      character,
+      messages: payload.messages || [],
+      audio: payload.audio || {},
+    });
     sendJson(res, 200, reply);
     return;
   }

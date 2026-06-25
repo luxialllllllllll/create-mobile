@@ -554,6 +554,47 @@ select:focus {
   border: 1px solid #82c95d;
 }
 
+.bubble.audio-bubble {
+  min-width: 112px;
+  padding: 0;
+  overflow: hidden;
+}
+
+.audio-message {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 13px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-weight: 800;
+}
+
+.audio-message:disabled {
+  opacity: 0.65;
+}
+
+.audio-wave {
+  display: inline-block;
+  font-family: monospace;
+  font-weight: 900;
+  transform: rotate(180deg);
+}
+
+.audio-message.playing .audio-wave {
+  animation: audio-wave 750ms ease-in-out infinite alternate;
+}
+
+@keyframes audio-wave {
+  to {
+    transform: rotate(180deg) scaleX(0.72);
+  }
+}
+
 .chat-compose {
   display: grid;
   grid-template-columns: 42px 1fr 42px;
