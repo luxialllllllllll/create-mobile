@@ -1,214 +1,187 @@
-<div align="center">
+# Create-Ex 角色聊天网页版
 
-# 前任.skill
+Create-Ex 是一个面向手机浏览器的 AI 角色创建与聊天应用。用户可以创建多个角色，为每个角色设置姓名、性别、头像、备注、关系背景、性格和独立材料，然后以类似微信的界面进行文字或语音聊天。
 
-> *"从此以后，你的手机里不止有聊天记录，还有一个她。"*
+项目同时保留了原始 Claude Code Skill、`prompts/` 和 `tools/`，当前 README 主要介绍 `web-version/` 网页版。
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Python 3.9+](https://img.shields.io/badge/Python-3.9%2B-blue.svg)](https://python.org)
-[![Claude Code](https://img.shields.io/badge/Claude%20Code-Skill-blueviolet)](https://claude.ai/code)
-[![AgentSkills](https://img.shields.io/badge/AgentSkills-Standard-green)](https://agentskills.io)
+## 当前功能
 
-<br>
+- 创建和保存多个独立角色
+- 设置角色姓名、性别、头像、备注、关系概况和性格
+- 为每个角色分别管理聊天记录、重要事件和纠错材料
+- 微信式聊天列表、全屏对话和消息头像
+- 发送文字消息
+- 录制并发送真正的语音消息
+- Gemini 直接理解语音内容和情绪
+- 角色文字回复朗读
+- 全局“关于我”资料，供所有角色共同读取
+- 邮箱注册与登录
+- 跨设备同步角色、材料、聊天、头像和语音
+- 导出 `memories.md`、`persona.md`、`meta.json` 和 GPT Instructions
 
-她走了，但聊天记录还在？<br>
-三年的日常，变成了手机里一个不敢点开的对话框？<br>
-你还记得她说"随便"的时候其实想吃火锅吗？<br>
-你还记得她发"哦"的时候其实在等你主动吗？<br>
+## 技术结构
 
-**将回忆蒸馏成 Skill，不是为了挽回，是为了记住。**
+网页版没有使用前端框架，主要由原生 Web 技术构成：
 
-<br>
-
-提供聊天记录（微信、iMessage、短信）、照片、社交媒体，加上你的主观描述<br>
-生成一个**像她一样说话的 AI Skill**<br>
-用她的语气回消息，知道她什么时候在撒娇、什么时候真的生气了
-
-[数据来源](#支持的数据来源) · [安装](#安装) · [使用](#使用) · [效果示例](#效果示例) · [详细安装说明](INSTALL.md) · [**English**](README_EN.md)
-
-</div>
-
----
-
-## 支持的数据来源
-
-| 来源 | 聊天记录 | 照片 | 社交媒体 | 备注 |
-|------|:-------:|:----:|:-------:|------|
-| 微信聊天记录 | ✅ | — | — | WechatExporter 等工具导出 |
-| iMessage | ✅ | — | — | macOS chat.db 或导出文件 |
-| 短信 | ✅ | — | — | Android SMS Backup XML/CSV |
-| 照片 | — | ✅ | — | EXIF 元数据提取时间线 |
-| 微博 | — | — | ✅ | JSON 数据导出 |
-| 豆瓣 | — | — | ✅ | JSON/HTML 导出 |
-| 小红书 | — | — | ✅ | JSON 导出 |
-| Instagram | — | — | ✅ | JSON 数据导出 |
-| PDF / 图片 | ✅ | ✅ | — | 手动上传 |
-| 直接粘贴文字 | ✅ | — | — | 手动输入 |
-
----
-
-## 安装
-
-### Claude Code
-
-```bash
-# 安装到当前项目（在 git 仓库根目录执行）
-mkdir -p .claude/skills
-git clone https://github.com/perkfly/ex-skill .claude/skills/create-ex
-
-# 或安装到全局（所有项目都能用）
-git clone https://github.com/perkfly/ex-skill ~/.claude/skills/create-ex
+```text
+web-version/
+├── index.html             # 页面结构
+├── styles.css             # 手机端界面与响应式样式
+├── app.js                 # 角色、聊天、录音、登录与同步逻辑
+├── server.js              # Node.js 静态服务和 API 代理
+├── sw.js                  # PWA 缓存与版本更新
+├── manifest.webmanifest   # PWA 配置
+├── assets/                # 默认头像等静态资源
+└── SUPABASE_SETUP.sql     # 账户数据表、RLS 和私有媒体桶
 ```
 
-### OpenClaw
+后端使用 Node.js 原生 `http` 模块，没有 Express 等运行时依赖。前端通过同源 `/api/*` 接口与后端通信，API Key 不会写入浏览器代码。
 
-```bash
-git clone https://github.com/perkfly/ex-skill ~/.openclaw/workspace/skills/create-ex
+## AI 接口
+
+当前默认使用 **Google Gemini API**。
+
+### 文字聊天
+
+文字消息通过 Gemini 的 OpenAI-compatible Chat Completions 接口发送：
+
+```text
+https://generativelanguage.googleapis.com/v1beta/openai/chat/completions
 ```
 
-### 依赖（可选）
+默认模型：
 
-```bash
-pip3 install -r requirements.txt
+```text
+gemini-2.5-flash
 ```
 
----
+请求内容包括：
 
-## 使用
+- 当前角色的 Persona 与共同记忆
+- 当前角色独立材料生成的角色指令
+- 用户在“关于我”页面填写的文字资料
+- 最近的聊天上下文
+- 用户当前发送的文字
 
-在 Claude Code 中输入：
+### 语音聊天
 
-```
-/create-ex
-```
+用户发送的 WAV 语音通过 Gemini `generateContent` 多模态接口处理。Gemini 直接理解语音内容、语气和情绪，不先在浏览器里转成文字。
 
-按提示输入她的昵称、关系信息（如 `在一起三年 大学同学 分手一年`）、性格标签，然后选择数据来源。所有字段均可跳过，仅凭描述也能生成。
+语音消息本体会显示为可播放的语音气泡。角色回复目前仍为文字，可选择使用浏览器的 Speech Synthesis 自动朗读。
 
-完成后用 `/{slug}` 调用该前任 Skill。
+### 对话边界
 
-### 管理命令
+服务端会为所有角色追加统一的聊天规则：
 
-| 命令 | 说明 |
-|------|------|
-| `/list-exes` | 列出所有前任 Skill |
-| `/{slug}` | 调用完整 Skill（Persona + Memories） |
-| `/{slug}-memories` | 仅共同记忆 |
-| `/{slug}-persona` | 仅人物性格 |
-| `/ex-rollback {slug} {version}` | 回滚到历史版本 |
-| `/delete-ex {slug}` | 删除 |
+- 默认使用简短、自然的微信式回复
+- 不输出小说旁白或括号动作
+- 不虚构异地聊天中无法发生的身体接触
+- 不擅自升级用户与角色的现实关系
+- 不编造没有资料依据的共同经历
 
----
+Gemini 临时返回 `429` 或 `5xx` 错误时，服务端会进行有限次数的自动重试。
 
-## 效果示例
+## 账户与云端同步
 
-> 输入：`ENFP 双子座 焦虑型 爱撒娇 翻旧账 嘴上说不在意其实比谁都在意`
+账户系统使用 **Supabase Auth**，当前支持邮箱和密码注册、登录、会话刷新与退出。
 
-**场景一：日常聊天**
+跨设备数据由 Supabase 提供：
 
-```
-用户      > 在干嘛呢
+- **Postgres**：保存用户的结构化应用状态
+- **Storage**：保存头像和语音文件
+- **Row Level Security**：限制用户只能读取和修改自己的数据
 
-前任.skill > 刚下班
-           > 好累啊今天
-           > 你呢 怎么这个点才找我 🥺
-```
+`SUPABASE_SETUP.sql` 会创建：
 
-**场景二：惹她生气了**
-
-```
-用户      > 不好意思刚才在忙
-
-前任.skill > 哦
-           > （过了5分钟）
-           > 你每次都说在忙
-           > 上次也是这样
+```text
+public.user_states
 ```
 
-**场景三：撒娇**
+每位用户对应一条 JSON 状态记录，包含：
 
-```
-用户      > 想吃什么
+- 全局“关于我”文字资料
+- 所有角色资料
+- 每个角色的材料
+- 每个角色的生成结果
+- 聊天消息元数据
+- 未读数量和当前界面状态
 
-前任.skill > 随便啊
-用户      > 那吃面？
-前任.skill > 不想吃面
-用户      > 火锅？
-前任.skill > 嘿嘿你怎么知道的 💕
-```
+私有 Storage Bucket：
 
----
-
-## 功能特性
-
-### 生成的 Skill 结构
-
-每个前任 Skill 由两部分组成：
-
-| 部分 | 内容 |
-|------|------|
-| **Part A — 共同记忆** | 关系时间线、日常仪式、偏好习惯、情感模式 |
-| **Part B — Persona** | 5 层性格结构：硬规则 → 身份 → 表达风格 → 情感逻辑 → 关系行为 |
-
-运行逻辑：`收到消息 → Persona 判断心情和态度 → Memories 提供记忆细节 → 用她的语气输出`
-
-### 支持的标签
-
-**恋爱性格**：爱撒娇 · 冷暴力 · 翻旧账 · 黏人 · 独立 · 细腻敏感 · 忽冷忽热 · 作 · 玻璃心 · 控制欲强 …
-
-**吵架模式**：冷战派 · 爆发派 · 讲道理派 · 先道歉型 · 死不认错
-
-**依恋类型**：安全型 · 焦虑型 · 回避型 · 混乱型
-
-**爱的表达**：言语肯定 · 服务行为 · 送礼物 · 肢体接触 · 高质量陪伴
-
-### 进化机制
-
-- **追加聊天记录** → 自动分析增量 → merge 进对应部分，不覆盖已有结论
-- **对话纠正** → 说「她不会这样，她应该是 xxx」→ 写入 Correction 层，立即生效
-- **版本管理** → 每次更新自动存档，支持回滚到任意历史版本
-
----
-
-## 项目结构
-
-```
-ex-skill/
-├── SKILL.md              # skill 入口（AgentSkills 标准 frontmatter）
-├── prompts/              # Prompt 模板
-│   ├── intake.md         #   对话式信息录入
-│   ├── memories_analyzer.md #  共同记忆提取
-│   ├── persona_analyzer.md  #  性格行为提取（含标签翻译表）
-│   ├── memories_builder.md  #  memories.md 生成模板
-│   ├── persona_builder.md   #  persona.md 五层结构模板
-│   ├── merger.md            #  增量 merge 逻辑
-│   └── correction_handler.md # 对话纠正处理
-├── tools/                # Python 工具
-│   ├── wechat_parser.py       # 微信聊天记录解析
-│   ├── imessage_parser.py     # iMessage 解析
-│   ├── sms_parser.py          # 短信解析
-│   ├── photo_analyzer.py      # 照片 EXIF 元数据分析
-│   ├── social_media_parser.py # 社交媒体解析
-│   ├── skill_writer.py        # Skill 文件管理
-│   └── version_manager.py     # 版本存档与回滚
-├── exes/                 # 生成的前任 Skill（gitignored）
-├── docs/PRD.md
-├── requirements.txt
-└── LICENSE
+```text
+user-media
 ```
 
----
+其中保存：
 
-## 注意事项
+- 用户头像
+- 角色头像
+- 用户发送的语音文件
 
-- **聊天记录质量决定 Skill 质量**：真实聊天记录 > 仅手动描述
-- 建议优先收集：她**主动发的**长消息 > **情感类消息** > 日常消息
-- 照片分析只提取元数据（日期/位置），不上传照片内容
-- 所有数据仅在本地处理，不会发送到任何外部服务
+媒体路径以 Supabase 用户 ID 开头，配合 RLS Storage Policy 实现用户隔离。
 
----
+## 本地数据存储
 
-<div align="center">
+即使未登录，应用也可以在当前浏览器中使用。
 
-MIT License © [perkfly](https://github.com/perkfly)
+### localStorage
 
-</div>
+主要应用状态保存在：
+
+```text
+create-ex-mobile-state
+```
+
+其中包含角色、材料、文字聊天、用户资料和界面状态。登录会话和本机模式选择使用独立的 localStorage Key。
+
+### IndexedDB
+
+体积较大的二进制文件保存在 IndexedDB：
+
+```text
+Database: create-ex-audio
+Stores:
+- clips
+- avatars
+```
+
+保存内容包括：
+
+- WAV 语音
+- 自动裁剪压缩后的 WebP 头像
+
+用户登录后，这些本地媒体会同步到 Supabase Storage；换设备登录时再下载到新设备的 IndexedDB。
+
+## 首次同步规则
+
+用户第一次在某个账户登录时：
+
+- 如果云端已有数据，应用载入云端记录
+- 如果云端为空，应用将当前设备上的本地角色与聊天上传到云端
+
+此后本地修改会先立即写入浏览器，并在短暂延迟后自动同步到 Supabase。这样网络暂时中断时，本机操作仍然可以保留。
+
+## 数据与隐私
+
+- Gemini API Key 仅由服务端读取
+- Supabase `anon` / publishable key 可以公开，但数据访问受登录令牌和 RLS 限制
+- 不应在前端或仓库中放置 Supabase `service_role` key
+- “关于我”的文字资料会随聊天请求发送给 Gemini
+- 用户发送语音时，语音内容会发送给 Gemini 进行理解
+- 头像不会发送给 Gemini，只用于本地界面和 Supabase 跨设备同步
+- 未登录时，数据只存在当前浏览器，清除网站数据可能导致记录丢失
+
+## 原始 Skill 版本
+
+仓库仍保留以下原始内容：
+
+- `SKILL.md`
+- `prompts/`
+- `tools/`
+- `gpt-version/`
+
+这些文件与网页版并存，没有因网页端开发而删除或替换。
+
+## License
+
+[MIT License](LICENSE)
