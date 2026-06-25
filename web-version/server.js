@@ -264,7 +264,47 @@ ${character.persona}
 
 ${formatUserProfile(character.userProfile)}
 
-使用这些资料理解用户和选择合适的称呼，但不要生硬复述资料，也不要假装知道用户没有填写的内容。`;
+使用这些资料理解用户和选择合适的称呼，但不要生硬复述资料，也不要假装知道用户没有填写的内容。
+
+## 当前对话形式与现实边界
+
+- 当前是手机上的文字或语音聊天，双方不在同一物理空间。
+- 只输出角色实际发送的聊天内容，不写小说旁白、舞台动作或括号动作。
+- 不描写拥抱、亲吻、抚摸、靠在怀里等无法通过手机真实发生的身体接触。
+- 不擅自升级关系，不把朋友写成恋人，不使用未经用户确认的亲密身份。
+- 即使用户的消息里带有括号动作，也用符合现实关系和异地聊天状态的语言回应，不接续虚构动作。
+- 默认回复 1 至 3 个短句，像真实微信消息，不要长篇表演。`;
+}
+
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function stripPhysicalStageDirections(text) {
+  const actionWords = /拥抱|抱住|搂|亲了|亲吻|吻了|抚摸|摸了|靠在|怀里|下巴|额头|发间|手臂|手掌|低头|凑近|贴着|圈住|收紧|动作|语气|声音很|闻着/;
+  return String(text || "")
+    .replace(/[（(]([^()（）]{0,180})[）)]/g, (match, content) => (
+      actionWords.test(content) ? "" : match
+    ))
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function normalizeRoleReply(text) {
+  return stripPhysicalStageDirections(text) || "嗯，我在。";
+}
+
+async function fetchWithRetry(endpoint, options, attempts = 3) {
+  let response;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    response = await fetch(endpoint, options);
+    if (![429, 500, 502, 503, 504].includes(response.status) || attempt === attempts - 1) {
+      return response;
+    }
+    await response.arrayBuffer().catch(() => {});
+    await wait(700 * (2 ** attempt));
+  }
+  return response;
 }
 
 async function callModel({ character, messages }) {
@@ -279,14 +319,16 @@ async function callModel({ character, messages }) {
       { role: "system", content: buildSystemPrompt(character) },
       ...messages.slice(-24).map((message) => ({
         role: message.role === "assistant" ? "assistant" : "user",
-        content: message.content,
+        content: message.role === "assistant"
+          ? stripPhysicalStageDirections(message.content)
+          : message.content,
       })),
     ],
     stream: false,
     temperature: 0.85,
   };
 
-  const response = await fetch(endpoint, {
+  const response = await fetchWithRetry(endpoint, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -297,10 +339,13 @@ async function callModel({ character, messages }) {
 
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
+    if (response.status === 503) {
+      throw new Error("Gemini 暂时繁忙，已经自动重试过了，请稍后再发一次");
+    }
     throw new Error(data.error?.message || `API 请求失败：${response.status}`);
   }
   return {
-    content: data.choices?.[0]?.message?.content || "",
+    content: normalizeRoleReply(data.choices?.[0]?.message?.content || ""),
     usage: data.usage || null,
     provider: config.provider,
     model: config.model,
@@ -321,7 +366,11 @@ async function callGeminiAudio({ character, messages, audio }) {
   const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(config.model)}:generateContent`;
   const contents = messages.slice(-20).map((message) => ({
     role: message.role === "assistant" ? "model" : "user",
-    parts: [{ text: String(message.content || "") }],
+    parts: [{
+      text: message.role === "assistant"
+        ? stripPhysicalStageDirections(message.content)
+        : String(message.content || ""),
+    }],
   }));
   contents.push({
     role: "user",
@@ -337,7 +386,7 @@ async function callGeminiAudio({ character, messages, audio }) {
       },
     ],
   });
-  const response = await fetch(endpoint, {
+  const response = await fetchWithRetry(endpoint, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -355,6 +404,9 @@ async function callGeminiAudio({ character, messages, audio }) {
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
+    if (response.status === 503) {
+      throw new Error("Gemini 暂时繁忙，已经自动重试过了，请稍后再发一次");
+    }
     throw new Error(data.error?.message || `Gemini 音频请求失败：${response.status}`);
   }
   const content = (data.candidates?.[0]?.content?.parts || [])
@@ -363,7 +415,7 @@ async function callGeminiAudio({ character, messages, audio }) {
     .trim();
   if (!content) throw new Error("Gemini 没有返回语音回复");
   return {
-    content,
+    content: normalizeRoleReply(content),
     usage: data.usageMetadata || null,
     provider: config.provider,
     model: config.model,
