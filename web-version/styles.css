@@ -160,6 +160,47 @@ h2 {
   font-weight: 700;
 }
 
+.avatar-editor {
+  display: grid;
+  grid-template-columns: 72px 1fr;
+  gap: 12px;
+  align-items: center;
+}
+
+.avatar-preview {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background:
+    linear-gradient(135deg, rgba(255,255,255,.35), transparent 45%),
+    url("./assets/avatar.svg") center / cover,
+    linear-gradient(135deg, #c9d8d1, #826f62);
+  border: 1px solid rgba(47, 111, 94, 0.28);
+}
+
+.avatar-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.avatar-actions .secondary {
+  display: grid;
+  place-items: center;
+  min-height: 42px;
+  text-align: center;
+}
+
+.avatar-upload input {
+  display: none;
+}
+
+.custom-avatar {
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+}
+
 input,
 textarea,
 select {

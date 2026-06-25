@@ -15,6 +15,7 @@ const state = {
     name: "",
     slug: "",
     gender: "",
+    avatarId: "",
     basic: "",
     persona: "",
     tags: [],
@@ -70,6 +71,7 @@ function blankRole() {
     name: "",
     slug: "",
     gender: "",
+    avatarId: "",
     basic: "",
     persona: "",
     tags: [],
@@ -222,6 +224,7 @@ function syncInputs() {
   els.basicInput.value = state.role.basic;
   els.personaInput.value = state.role.persona;
   els.roleVersion.textContent = state.role.version || "v1";
+  applyRoleAvatar(els.avatarPreview, state.role);
   document.querySelectorAll("[data-gender]").forEach((button) => {
     const active = button.dataset.gender === state.role.gender;
     button.classList.toggle("active", active);
@@ -284,6 +287,7 @@ async function loadCharacter(slug) {
     name: character.name,
     slug: character.slug,
     gender: character.meta?.profile?.gender || "",
+    avatarId: "",
     basic: character.meta?.impression || character.meta?.profile?.relationship_type || "",
     persona: [
       character.meta?.impression,
@@ -609,6 +613,7 @@ function renderConversationList() {
       </span>
     `;
     item.querySelector("strong").textContent = snapshot.role?.name || key;
+    applyRoleAvatar(item.querySelector(".conversation-avatar"), snapshot.role || {});
     item.querySelector("small").textContent = lastMessageText(snapshot);
     item.querySelector(".conversation-time").textContent = snapshot.updatedAt
       ? new Date(snapshot.updatedAt).toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" })
@@ -632,6 +637,7 @@ function renderChat() {
   }
   const name = state.role.name || "未命名角色";
   els.chatName.textContent = name;
+  applyRoleAvatar(els.chatAvatar, state.role);
   els.autoVoiceBtn.classList.toggle("active", Boolean(state.role.voiceAuto));
   els.autoVoiceBtn.setAttribute("aria-pressed", String(Boolean(state.role.voiceAuto)));
   if (state.server.online && state.server.hasApiKey) {
@@ -674,7 +680,9 @@ function renderChat() {
 
 const AUDIO_DB_NAME = "create-ex-audio";
 const AUDIO_STORE_NAME = "clips";
+const AVATAR_STORE_NAME = "avatars";
 const audioObjectUrls = new Set();
+const avatarObjectUrls = new Map();
 let voiceRecorder = null;
 let voiceReleaseRequested = false;
 let voiceAutoStopTimer = null;
@@ -688,10 +696,13 @@ function setListening(active) {
 
 function openAudioDb() {
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open(AUDIO_DB_NAME, 1);
+    const request = indexedDB.open(AUDIO_DB_NAME, 2);
     request.onupgradeneeded = () => {
       if (!request.result.objectStoreNames.contains(AUDIO_STORE_NAME)) {
         request.result.createObjectStore(AUDIO_STORE_NAME);
+      }
+      if (!request.result.objectStoreNames.contains(AVATAR_STORE_NAME)) {
+        request.result.createObjectStore(AVATAR_STORE_NAME);
       }
     };
     request.onsuccess = () => resolve(request.result);
@@ -699,12 +710,12 @@ function openAudioDb() {
   });
 }
 
-async function saveAudioBlob(blob) {
-  const id = crypto.randomUUID?.() || `audio-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+async function saveMediaBlob(storeName, blob) {
+  const id = crypto.randomUUID?.() || `media-${Date.now()}-${Math.random().toString(16).slice(2)}`;
   const db = await openAudioDb();
   await new Promise((resolve, reject) => {
-    const transaction = db.transaction(AUDIO_STORE_NAME, "readwrite");
-    transaction.objectStore(AUDIO_STORE_NAME).put(blob, id);
+    const transaction = db.transaction(storeName, "readwrite");
+    transaction.objectStore(storeName).put(blob, id);
     transaction.oncomplete = resolve;
     transaction.onerror = () => reject(transaction.error);
   });
@@ -712,15 +723,96 @@ async function saveAudioBlob(blob) {
   return id;
 }
 
-async function getAudioBlob(id) {
+async function getMediaBlob(storeName, id) {
   const db = await openAudioDb();
   const blob = await new Promise((resolve, reject) => {
-    const request = db.transaction(AUDIO_STORE_NAME, "readonly").objectStore(AUDIO_STORE_NAME).get(id);
+    const request = db.transaction(storeName, "readonly").objectStore(storeName).get(id);
     request.onsuccess = () => resolve(request.result || null);
     request.onerror = () => reject(request.error);
   });
   db.close();
   return blob;
+}
+
+async function deleteMediaBlob(storeName, id) {
+  if (!id) return;
+  const db = await openAudioDb();
+  await new Promise((resolve, reject) => {
+    const transaction = db.transaction(storeName, "readwrite");
+    transaction.objectStore(storeName).delete(id);
+    transaction.oncomplete = resolve;
+    transaction.onerror = () => reject(transaction.error);
+  });
+  db.close();
+}
+
+async function saveAudioBlob(blob) {
+  return saveMediaBlob(AUDIO_STORE_NAME, blob);
+}
+
+async function getAudioBlob(id) {
+  return getMediaBlob(AUDIO_STORE_NAME, id);
+}
+
+async function avatarUrl(avatarId) {
+  if (!avatarId) return "";
+  if (avatarObjectUrls.has(avatarId)) return avatarObjectUrls.get(avatarId);
+  const blob = await getMediaBlob(AVATAR_STORE_NAME, avatarId);
+  if (!blob) return "";
+  const url = URL.createObjectURL(blob);
+  avatarObjectUrls.set(avatarId, url);
+  return url;
+}
+
+async function applyRoleAvatar(element, role) {
+  if (!element) return;
+  const avatarId = role?.avatarId || "";
+  element.dataset.avatarId = avatarId;
+  element.classList.remove("custom-avatar");
+  element.style.backgroundImage = "";
+  if (!avatarId) return;
+  try {
+    const url = await avatarUrl(avatarId);
+    if (!url || element.dataset.avatarId !== avatarId) return;
+    element.style.backgroundImage = `url("${url}")`;
+    element.classList.add("custom-avatar");
+  } catch {
+    // Keep the default avatar when local media is unavailable.
+  }
+}
+
+async function imageFileToAvatarBlob(file) {
+  let image;
+  let cleanup = () => {};
+  if ("createImageBitmap" in window) {
+    image = await createImageBitmap(file);
+    cleanup = () => image.close?.();
+  } else {
+    const sourceUrl = URL.createObjectURL(file);
+    image = await new Promise((resolve, reject) => {
+      const node = new Image();
+      node.onload = () => resolve(node);
+      node.onerror = () => reject(new Error("图片读取失败"));
+      node.src = sourceUrl;
+    });
+    cleanup = () => URL.revokeObjectURL(sourceUrl);
+  }
+  const side = Math.min(image.width, image.height);
+  const sourceX = Math.floor((image.width - side) / 2);
+  const sourceY = Math.floor((image.height - side) / 2);
+  const canvas = document.createElement("canvas");
+  canvas.width = 512;
+  canvas.height = 512;
+  const context = canvas.getContext("2d");
+  context.drawImage(image, sourceX, sourceY, side, side, 0, 0, 512, 512);
+  cleanup();
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => blob ? resolve(blob) : reject(new Error("头像处理失败")),
+      "image/webp",
+      0.82
+    );
+  });
 }
 
 function clearAudioObjectUrls() {
@@ -1033,6 +1125,7 @@ function loadSample() {
     name: "林知夏",
     slug: "sample-lin-zhi-xia",
     gender: "female",
+    avatarId: "",
     basic: "大学时期认识的朋友，长期保持微信联系。她在国内，用户在海外。关系亲近但有边界，适合作为移动端流程示例。",
     persona: "温和、清醒、会接住情绪，也会轻轻打趣。默认短句回复，像微信聊天，不一次性说太多。",
     tags: ["温柔", "行动型关心", "克制", "会打趣", "有边界感"],
@@ -1087,6 +1180,48 @@ function bindEvents() {
       renderOutputs();
       saveState();
     });
+  });
+
+  els.avatarInput.addEventListener("change", async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast("请选择图片文件");
+      return;
+    }
+    try {
+      const oldAvatarId = state.role.avatarId;
+      const blob = await imageFileToAvatarBlob(file);
+      state.role.avatarId = await saveMediaBlob(AVATAR_STORE_NAME, blob);
+      if (oldAvatarId) {
+        const oldUrl = avatarObjectUrls.get(oldAvatarId);
+        if (oldUrl) URL.revokeObjectURL(oldUrl);
+        avatarObjectUrls.delete(oldAvatarId);
+        await deleteMediaBlob(AVATAR_STORE_NAME, oldAvatarId);
+      }
+      syncInputs();
+      renderChat();
+      saveState();
+      toast("头像已更新");
+    } catch {
+      toast("头像处理失败，请换一张图片");
+    }
+  });
+
+  els.removeAvatarBtn.addEventListener("click", async () => {
+    const avatarId = state.role.avatarId;
+    state.role.avatarId = "";
+    if (avatarId) {
+      const oldUrl = avatarObjectUrls.get(avatarId);
+      if (oldUrl) URL.revokeObjectURL(oldUrl);
+      avatarObjectUrls.delete(avatarId);
+      await deleteMediaBlob(AVATAR_STORE_NAME, avatarId).catch(() => {});
+    }
+    syncInputs();
+    renderChat();
+    saveState();
+    toast("已恢复默认头像");
   });
 
   els.characterSelect.addEventListener("change", async () => {
@@ -1278,6 +1413,9 @@ function cacheElements() {
     "materialRoleSelect",
     "generateRoleSelect",
     "nameInput",
+    "avatarPreview",
+    "avatarInput",
+    "removeAvatarBtn",
     "basicInput",
     "personaInput",
     "roleVersion",
@@ -1303,6 +1441,7 @@ function cacheElements() {
     "chatNewRoleBtn",
     "chatBackBtn",
     "chatName",
+    "chatAvatar",
     "chatContext",
     "chatLog",
     "chatForm",

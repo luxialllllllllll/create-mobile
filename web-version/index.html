@@ -47,6 +47,20 @@
           </label>
 
           <div class="field">
+            <span>头像</span>
+            <div class="avatar-editor">
+              <div class="avatar-preview" id="avatarPreview" aria-label="角色头像预览"></div>
+              <div class="avatar-actions">
+                <label class="secondary avatar-upload" for="avatarInput">
+                  <input id="avatarInput" type="file" accept="image/*" />
+                  选择图片
+                </label>
+                <button class="secondary" id="removeAvatarBtn" type="button">移除头像</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="field">
             <span>性别</span>
             <div class="gender-control" role="group" aria-label="角色性别">
               <button type="button" data-gender="male" aria-pressed="false">男</button>
@@ -165,7 +179,7 @@
           <div class="chat-thread-view" id="chatThreadView">
             <div class="chat-header">
               <button class="icon-button back-button" id="chatBackBtn" type="button" aria-label="返回聊天列表">‹</button>
-              <div class="avatar-asset" aria-hidden="true"></div>
+              <div class="avatar-asset" id="chatAvatar" aria-hidden="true"></div>
               <div class="chat-heading">
                 <h2 id="chatName">未命名角色</h2>
                 <p id="chatContext">微信式聊天 · 后端未连接</p>
