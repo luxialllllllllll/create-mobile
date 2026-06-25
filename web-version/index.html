@@ -9,6 +9,34 @@
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
+    <section class="auth-screen" id="authScreen" hidden>
+      <div class="auth-panel">
+        <p class="eyebrow">create-ex</p>
+        <h1>登录角色工坊</h1>
+        <p class="auth-copy">登录后，角色、材料和聊天记录会在你的设备之间同步。</p>
+
+        <div class="auth-tabs" role="tablist" aria-label="账户操作">
+          <button class="active" type="button" data-auth-mode="login">登录</button>
+          <button type="button" data-auth-mode="signup">注册</button>
+        </div>
+
+        <form id="authForm">
+          <label class="field">
+            <span>邮箱</span>
+            <input id="authEmailInput" type="email" autocomplete="email" required placeholder="name@example.com" />
+          </label>
+          <label class="field">
+            <span>密码</span>
+            <input id="authPasswordInput" type="password" autocomplete="current-password" minlength="6" required placeholder="至少 6 位" />
+          </label>
+          <button class="primary auth-submit" id="authSubmitBtn" type="submit">登录</button>
+        </form>
+
+        <button class="text-button auth-guest" id="continueLocalBtn" type="button">先在本机使用</button>
+        <p class="auth-status" id="authStatus"></p>
+      </div>
+    </section>
+
     <div class="app-shell">
       <header class="topbar">
         <div>
@@ -131,6 +159,15 @@
           </div>
 
           <p class="profile-intro">这里的资料会提供给所有角色，修改一次即可全局生效。</p>
+
+          <section class="account-panel">
+            <div>
+              <span>云端账户</span>
+              <strong id="accountEmail">未登录</strong>
+              <small id="syncStatus">仅保存在当前设备</small>
+            </div>
+            <button class="secondary" id="accountActionBtn" type="button">登录</button>
+          </section>
 
           <div class="profile-hero">
             <div class="profile-avatar" id="profileAvatar" aria-label="我的头像"></div>

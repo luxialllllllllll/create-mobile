@@ -31,12 +31,30 @@ MODEL_PROVIDER=gemini
 GEMINI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai
 GEMINI_MODEL=gemini-2.5-flash
 GEMINI_API_KEY=你的 Gemini API Key
+SUPABASE_URL=https://你的项目.supabase.co
+SUPABASE_ANON_KEY=你的 Supabase publishable/anon key
 ```
 
 不要把 API Key 写进代码或上传到 GitHub。
 
 Gemini API Key 可以在 Google AI Studio 创建。已有 Render 服务不会自动删除旧的智谱变量；
 只要新增以上四项，并确保 `MODEL_PROVIDER=gemini` 即可。旧变量可以保留，也可以手动删除。
+
+## 登录与跨设备同步
+
+1. 在 Supabase 创建免费项目。
+2. 打开 SQL Editor，执行项目内的 `web-version/SUPABASE_SETUP.sql`。
+3. 在 Supabase 的 Project Settings / API 中找到 Project URL 和 publishable/anon key。
+4. 将它们分别填入 Render 的 `SUPABASE_URL` 和 `SUPABASE_ANON_KEY`。
+5. 保存环境变量并重新部署。
+
+默认情况下 Supabase 注册需要邮件确认。测试阶段可以在 Auth / Providers / Email 中关闭
+Confirm email；正式使用建议保留邮件确认。
+
+登录后会同步角色、材料、聊天记录、“我的”资料、头像和语音。第一次登录时：
+
+- 云端已有记录：载入云端记录。
+- 云端没有记录：把当前设备的本地记录上传到云端。
 
 ## 部署后的使用方式
 

@@ -34,6 +34,78 @@ body {
   color: var(--ink);
 }
 
+.auth-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: #f2eee7;
+}
+
+.auth-screen[hidden] {
+  display: none;
+}
+
+.auth-panel {
+  width: min(100%, 420px);
+  padding: 24px 20px;
+}
+
+.auth-panel h1 {
+  margin-bottom: 9px;
+}
+
+.auth-copy {
+  margin-bottom: 20px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.auth-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+  margin-bottom: 18px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: rgba(255, 253, 248, 0.75);
+}
+
+.auth-tabs button {
+  min-height: 38px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 900;
+}
+
+.auth-tabs button.active {
+  background: #dcebe4;
+  color: var(--accent-dark);
+}
+
+.auth-submit,
+.auth-guest {
+  width: 100%;
+  min-height: 44px;
+}
+
+.auth-guest {
+  margin-top: 10px;
+}
+
+.auth-status {
+  min-height: 20px;
+  margin-top: 12px;
+  color: var(--warn);
+  text-align: center;
+  font-size: 13px;
+}
+
 button,
 input,
 textarea,
@@ -420,6 +492,40 @@ select:focus {
   color: var(--muted);
   font-size: 13px;
   line-height: 1.5;
+}
+
+.account-panel {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  align-items: center;
+  padding: 13px;
+  margin-bottom: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: rgba(255, 253, 248, 0.9);
+}
+
+.account-panel > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.account-panel span,
+.account-panel small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.account-panel strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-panel .secondary {
+  min-width: 76px;
 }
 
 .profile-hero {

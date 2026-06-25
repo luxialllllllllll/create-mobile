@@ -1,4 +1,18 @@
 const STORAGE_KEY = "create-ex-mobile-state";
+const AUTH_STORAGE_KEY = "create-ex-cloud-session";
+const LOCAL_MODE_KEY = "create-ex-local-mode";
+
+const cloud = {
+  enabled: false,
+  url: "",
+  anonKey: "",
+  session: null,
+  syncing: false,
+  applying: false,
+  uploadedMedia: new Set(),
+};
+let cloudSyncTimer = null;
+let authMode = "login";
 
 const state = {
   activePanel: "chat",
@@ -213,6 +227,25 @@ function saveState() {
     savedAt: new Date().toISOString(),
   };
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  scheduleCloudSync();
+}
+
+function applyLoadedState(next) {
+  const liveServer = state.server;
+  Object.assign(state, next || {});
+  state.server = liveServer;
+  if (state.activePanel === "materials") {
+    state.activePanel = "chat";
+    state.chatView = state.role?.name ? "detail" : "list";
+  }
+  state.storage = { ...state.storage, ...(next?.storage || {}) };
+  state.storage.userId = state.storage.userId || createLocalUserId();
+  state.userProfile = { ...blankUserProfile(), ...(next?.userProfile || {}) };
+  state.roles = next?.roles || {};
+  state.role = { ...blankRole(), ...(next?.role || {}) };
+  state.outputs = { ...blankOutputs(), ...(next?.outputs || {}) };
+  if (!Object.keys(state.roles).length && state.role.name) persistCurrentRole();
+  if (state.activeRoleKey) applyRoleSnapshot(state.activeRoleKey);
 }
 
 function loadState() {
@@ -224,23 +257,7 @@ function loadState() {
   }
   try {
     const next = JSON.parse(raw);
-    Object.assign(state, next);
-    if (state.activePanel === "materials") {
-      state.activePanel = "chat";
-      state.chatView = state.role?.name ? "detail" : "list";
-    }
-    state.storage = { ...state.storage, ...(next.storage || {}) };
-    state.storage.userId = state.storage.userId || createLocalUserId();
-    state.userProfile = { ...blankUserProfile(), ...(next.userProfile || {}) };
-    state.roles = next.roles || {};
-    state.role = { ...state.role, ...(next.role || {}) };
-    state.outputs = { ...state.outputs, ...(next.outputs || {}) };
-    if (!Object.keys(state.roles).length && state.role.name) {
-      persistCurrentRole();
-    }
-    if (state.activeRoleKey) {
-      applyRoleSnapshot(state.activeRoleKey);
-    }
+    applyLoadedState(next);
   } catch {
     localStorage.removeItem(STORAGE_KEY);
     state.storage.userId = createLocalUserId();
@@ -305,6 +322,263 @@ async function api(path, options = {}) {
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(data.error || `请求失败：${response.status}`);
   return data;
+}
+
+function cloudHeaders(accessToken = "") {
+  return {
+    apikey: cloud.anonKey,
+    ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+  };
+}
+
+async function cloudRequest(path, options = {}) {
+  const response = await fetch(`${cloud.url}${path}`, {
+    ...options,
+    headers: {
+      ...cloudHeaders(options.auth === false ? "" : cloud.session?.access_token),
+      ...(options.headers || {}),
+    },
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.msg || data.message || data.error_description || data.error || `云端请求失败：${response.status}`);
+  }
+  return data;
+}
+
+function storeCloudSession(session) {
+  cloud.session = session || null;
+  if (session) {
+    localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(session));
+    localStorage.removeItem(LOCAL_MODE_KEY);
+  } else {
+    localStorage.removeItem(AUTH_STORAGE_KEY);
+  }
+  renderAccountState();
+}
+
+async function ensureCloudSession() {
+  if (!cloud.session) return false;
+  const expiresAt = Number(cloud.session.expires_at || 0);
+  if (!expiresAt || expiresAt * 1000 > Date.now() + 60000) return true;
+  if (!cloud.session.refresh_token) {
+    storeCloudSession(null);
+    return false;
+  }
+  try {
+    const data = await cloudRequest("/auth/v1/token?grant_type=refresh_token", {
+      method: "POST",
+      auth: false,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refresh_token: cloud.session.refresh_token }),
+    });
+    storeCloudSession(data);
+    return true;
+  } catch {
+    storeCloudSession(null);
+    return false;
+  }
+}
+
+function cloudStatePayload() {
+  persistCurrentRole();
+  return JSON.parse(JSON.stringify({
+    ...state,
+    server: {
+      online: false,
+      hasApiKey: false,
+      model: "",
+      provider: "",
+    },
+  }));
+}
+
+function collectMediaIds(source = state) {
+  const avatars = new Set();
+  const clips = new Set();
+  if (source.userProfile?.avatarId) avatars.add(source.userProfile.avatarId);
+  if (source.role?.avatarId) avatars.add(source.role.avatarId);
+  const snapshots = Object.values(source.roles || {});
+  snapshots.forEach((snapshot) => {
+    if (snapshot.role?.avatarId) avatars.add(snapshot.role.avatarId);
+    (snapshot.chat || []).forEach((message) => {
+      if (message.type === "audio" && message.audioId) clips.add(message.audioId);
+    });
+  });
+  (source.chat || []).forEach((message) => {
+    if (message.type === "audio" && message.audioId) clips.add(message.audioId);
+  });
+  return { avatars: [...avatars], clips: [...clips] };
+}
+
+async function putMediaBlob(storeName, id, blob) {
+  const db = await openAudioDb();
+  await new Promise((resolve, reject) => {
+    const transaction = db.transaction(storeName, "readwrite");
+    transaction.objectStore(storeName).put(blob, id);
+    transaction.oncomplete = resolve;
+    transaction.onerror = () => reject(transaction.error);
+  });
+  db.close();
+}
+
+async function uploadCloudMedia(storeName, id) {
+  const cacheKey = `${storeName}:${id}`;
+  if (cloud.uploadedMedia.has(cacheKey)) return;
+  const blob = await getMediaBlob(storeName, id);
+  if (!blob) return;
+  const path = `${cloud.session.user.id}/${storeName}/${encodeURIComponent(id)}`;
+  const response = await fetch(`${cloud.url}/storage/v1/object/user-media/${path}`, {
+    method: "POST",
+    headers: {
+      ...cloudHeaders(cloud.session.access_token),
+      "Content-Type": blob.type || "application/octet-stream",
+      "x-upsert": "true",
+    },
+    body: blob,
+  });
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.message || `媒体同步失败：${response.status}`);
+  }
+  cloud.uploadedMedia.add(cacheKey);
+}
+
+async function downloadCloudMedia(storeName, id) {
+  if (await getMediaBlob(storeName, id)) return;
+  const path = `${cloud.session.user.id}/${storeName}/${encodeURIComponent(id)}`;
+  const response = await fetch(`${cloud.url}/storage/v1/object/authenticated/user-media/${path}`, {
+    headers: cloudHeaders(cloud.session.access_token),
+  });
+  if (!response.ok) return;
+  await putMediaBlob(storeName, id, await response.blob());
+}
+
+async function syncMediaToCloud(source) {
+  const media = collectMediaIds(source);
+  for (const id of media.avatars) await uploadCloudMedia(AVATAR_STORE_NAME, id);
+  for (const id of media.clips) await uploadCloudMedia(AUDIO_STORE_NAME, id);
+}
+
+async function restoreCloudMedia(source) {
+  const media = collectMediaIds(source);
+  await Promise.all([
+    ...media.avatars.map((id) => downloadCloudMedia(AVATAR_STORE_NAME, id)),
+    ...media.clips.map((id) => downloadCloudMedia(AUDIO_STORE_NAME, id)),
+  ]);
+}
+
+function setSyncStatus(text) {
+  if (els.syncStatus) els.syncStatus.textContent = text;
+}
+
+async function pushCloudState() {
+  if (!cloud.enabled || cloud.applying || cloud.syncing || !(await ensureCloudSession())) return;
+  cloud.syncing = true;
+  setSyncStatus("正在同步...");
+  try {
+    const snapshot = cloudStatePayload();
+    await syncMediaToCloud(snapshot);
+    const response = await fetch(`${cloud.url}/rest/v1/user_states?on_conflict=user_id`, {
+      method: "POST",
+      headers: {
+        ...cloudHeaders(cloud.session.access_token),
+        "Content-Type": "application/json",
+        Prefer: "resolution=merge-duplicates,return=minimal",
+      },
+      body: JSON.stringify({
+        user_id: cloud.session.user.id,
+        state: snapshot,
+        updated_at: new Date().toISOString(),
+      }),
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.message || `同步失败：${response.status}`);
+    }
+    setSyncStatus("已同步到云端");
+  } catch (error) {
+    setSyncStatus(error.message);
+  } finally {
+    cloud.syncing = false;
+  }
+}
+
+function scheduleCloudSync() {
+  if (!cloud.enabled || !cloud.session || cloud.applying) return;
+  setSyncStatus("等待同步...");
+  window.clearTimeout(cloudSyncTimer);
+  cloudSyncTimer = window.setTimeout(pushCloudState, 1800);
+}
+
+async function pullOrCreateCloudState() {
+  if (!(await ensureCloudSession())) return;
+  setSyncStatus("正在读取云端...");
+  const rows = await cloudRequest(`/rest/v1/user_states?user_id=eq.${encodeURIComponent(cloud.session.user.id)}&select=state,updated_at&limit=1`);
+  if (rows[0]?.state) {
+    cloud.applying = true;
+    try {
+      await restoreCloudMedia(rows[0].state);
+      applyLoadedState(rows[0].state);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      syncInputs();
+      syncProfileInputs();
+      renderPanels();
+      renderMaterials();
+      renderOutputs(false);
+      renderChat();
+      setSyncStatus("已载入云端记录");
+    } finally {
+      cloud.applying = false;
+    }
+  } else {
+    await pushCloudState();
+  }
+}
+
+function renderAccountState() {
+  const email = cloud.session?.user?.email || "";
+  if (els.accountEmail) els.accountEmail.textContent = email || "未登录";
+  if (els.accountActionBtn) els.accountActionBtn.textContent = email ? "退出" : "登录";
+  if (!email) setSyncStatus(cloud.enabled ? "登录后可跨设备同步" : "云端同步尚未配置");
+}
+
+function showAuthScreen(show = true) {
+  els.authScreen.hidden = !show;
+  if (show) {
+    els.authStatus.textContent = "";
+    els.authEmailInput.focus();
+  }
+}
+
+async function refreshCloudConfig() {
+  try {
+    const config = await api("/api/cloud/config");
+    cloud.enabled = Boolean(config.enabled);
+    cloud.url = String(config.url || "").replace(/\/$/, "");
+    cloud.anonKey = config.anonKey || "";
+    if (!cloud.enabled) {
+      renderAccountState();
+      return;
+    }
+    const rawSession = localStorage.getItem(AUTH_STORAGE_KEY);
+    if (rawSession) {
+      try {
+        cloud.session = JSON.parse(rawSession);
+      } catch {
+        localStorage.removeItem(AUTH_STORAGE_KEY);
+      }
+    }
+    if (await ensureCloudSession()) {
+      await pullOrCreateCloudState();
+    } else if (localStorage.getItem(LOCAL_MODE_KEY) !== "true") {
+      showAuthScreen(true);
+    }
+    renderAccountState();
+  } catch {
+    cloud.enabled = false;
+    renderAccountState();
+  }
 }
 
 async function refreshServer() {
@@ -1341,7 +1615,83 @@ async function removeUserProfileAvatar() {
   toast("已恢复默认头像");
 }
 
+function setAuthMode(mode) {
+  authMode = mode;
+  document.querySelectorAll("[data-auth-mode]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.authMode === mode);
+  });
+  els.authSubmitBtn.textContent = mode === "signup" ? "注册" : "登录";
+  els.authPasswordInput.autocomplete = mode === "signup" ? "new-password" : "current-password";
+  els.authStatus.textContent = "";
+}
+
+async function submitAuth(event) {
+  event.preventDefault();
+  if (!cloud.enabled) {
+    els.authStatus.textContent = "云端登录尚未配置";
+    return;
+  }
+  const email = els.authEmailInput.value.trim();
+  const password = els.authPasswordInput.value;
+  els.authSubmitBtn.disabled = true;
+  els.authStatus.textContent = authMode === "signup" ? "正在注册..." : "正在登录...";
+  try {
+    const path = authMode === "signup"
+      ? "/auth/v1/signup"
+      : "/auth/v1/token?grant_type=password";
+    const data = await cloudRequest(path, {
+      method: "POST",
+      auth: false,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
+    if (!data.access_token) {
+      setAuthMode("login");
+      els.authStatus.textContent = "注册成功，请先到邮箱确认，再回来登录";
+      return;
+    }
+    storeCloudSession(data);
+    showAuthScreen(false);
+    await pullOrCreateCloudState();
+    toast("登录成功，云端记录已同步");
+  } catch (error) {
+    els.authStatus.textContent = error.message;
+  } finally {
+    els.authSubmitBtn.disabled = false;
+  }
+}
+
+async function signOutCloud() {
+  try {
+    if (cloud.session?.access_token) {
+      await cloudRequest("/auth/v1/logout", { method: "POST" });
+    }
+  } catch {
+    // Clear the local session even if the remote sign-out request fails.
+  }
+  storeCloudSession(null);
+  cloud.uploadedMedia.clear();
+  setSyncStatus("已退出，当前设备仍保留本地记录");
+  showAuthScreen(true);
+}
+
 function bindEvents() {
+  document.querySelectorAll("[data-auth-mode]").forEach((button) => {
+    button.addEventListener("click", () => setAuthMode(button.dataset.authMode));
+  });
+  els.authForm.addEventListener("submit", submitAuth);
+  els.continueLocalBtn.addEventListener("click", () => {
+    localStorage.setItem(LOCAL_MODE_KEY, "true");
+    showAuthScreen(false);
+  });
+  els.accountActionBtn.addEventListener("click", () => {
+    if (cloud.session) {
+      signOutCloud();
+    } else {
+      showAuthScreen(true);
+    }
+  });
+
   document.querySelectorAll(".tabbar button").forEach((button) => {
     button.addEventListener("click", () => {
       state.activePanel = button.dataset.panel;
@@ -1612,6 +1962,13 @@ function bindEvents() {
 function cacheElements() {
   [
     "toast",
+    "authScreen",
+    "authForm",
+    "authEmailInput",
+    "authPasswordInput",
+    "authSubmitBtn",
+    "continueLocalBtn",
+    "authStatus",
     "characterSelect",
     "localRoleSelect",
     "generateRoleSelect",
@@ -1670,6 +2027,9 @@ function cacheElements() {
     "profileLocationInput",
     "profileBioInput",
     "saveProfileBtn",
+    "accountEmail",
+    "syncStatus",
+    "accountActionBtn",
   ].forEach((id) => {
     els[id] = $(id);
   });
@@ -1678,6 +2038,8 @@ function cacheElements() {
 async function init() {
   cacheElements();
   loadState();
+  setAuthMode("login");
+  await refreshCloudConfig();
   await refreshServer();
   await refreshCharacters();
   syncInputs();

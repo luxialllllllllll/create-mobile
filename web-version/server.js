@@ -131,6 +131,14 @@ function getConfig() {
   };
 }
 
+function getCloudConfig() {
+  const fileEnv = loadDotEnv();
+  return {
+    url: process.env.SUPABASE_URL || fileEnv.SUPABASE_URL || "",
+    anonKey: process.env.SUPABASE_ANON_KEY || fileEnv.SUPABASE_ANON_KEY || "",
+  };
+}
+
 function sendJson(res, status, data) {
   const body = JSON.stringify(data, null, 2);
   res.writeHead(status, {
@@ -423,6 +431,16 @@ async function callGeminiAudio({ character, messages, audio }) {
 }
 
 async function handleApi(req, res, pathname) {
+  if (pathname === "/api/cloud/config") {
+    const cloud = getCloudConfig();
+    sendJson(res, 200, {
+      enabled: Boolean(cloud.url && cloud.anonKey),
+      url: cloud.url,
+      anonKey: cloud.anonKey,
+    });
+    return;
+  }
+
   if (pathname === "/api/health") {
     const config = getConfig();
     sendJson(res, 200, {
